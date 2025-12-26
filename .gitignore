@@ -1,0 +1,33 @@
+# --- CausalX Specific Ignores ---
+# Exclude entire data folder (Store these on your external drive instead)
+data/
+datasets/
+
+# Exclude large model weights and pre-trained checkpoints
+models/*.pt
+models/*.pth
+models/*.h5
+models/*.bin
+
+# --- Python & Environment ---
+.venv/
+env/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- XAI & Visualization Artifacts ---
+# Exclude large generated explanation videos or temporary UI assets
+interface/static/temp_results/
+*.mp4
+*.avi
+
+# --- Mac Specific ---
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# --- IDE (VS Code) ---
+.vscode/
