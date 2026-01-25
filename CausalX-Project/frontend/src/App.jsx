@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useMemo, useState, useRef } from "react";
 import { analyzeVideo } from "./api";
 import BoundingBoxCanvas from "./components/BoundingBoxCanvas";
 import Timeline from "./components/Timeline";
@@ -88,7 +88,6 @@ export default function App() {
 
       {active && (
         <div className="panel">
-          <p><b>Timestamp:</b> {active.timestamp.toFixed(2)} s</p>
           <p><b>Fake probability:</b> {active.fake_prob.toFixed(3)}</p>
           <p><b>AV mismatch:</b> {active.av_mismatch.toFixed(3)}</p>
         </div>
