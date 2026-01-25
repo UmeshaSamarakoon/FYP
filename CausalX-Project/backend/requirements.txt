@@ -1,0 +1,17 @@
+numpy
+pandas
+scipy
+opencv-python
+librosa
+soundfile
+audioread
+mediapipe
+torch
+torchvision
+torchaudio
+scikit-learn
+tqdm
+fastapi
+uvicorn
+matplotlib
+seaborn
