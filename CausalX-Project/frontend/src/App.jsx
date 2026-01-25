@@ -10,7 +10,6 @@ export default function App() {
   const [summary, setSummary] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [videoDims, setVideoDims] = useState({ width: 720, height: 405 });
-  const [videoMeta, setVideoMeta] = useState({ width: 0, height: 0, duration: 0 });
   const videoRef = useRef(null);
   const probThreshold = 0.6;
 
@@ -45,39 +44,7 @@ export default function App() {
 
   const active = getActiveFrame();
   const isFake = summary?.label === "FAKE";
-
-  const segments = useMemo(() => {
-    if (!frames.length) return [];
-    const sorted = [...frames].sort((a, b) => a.timestamp - b.timestamp);
-    const deltas = [];
-    for (let i = 1; i < Math.min(sorted.length, 6); i += 1) {
-      deltas.push(sorted[i].timestamp - sorted[i - 1].timestamp);
-    }
-    const frameStep = deltas.length
-      ? deltas.reduce((a, b) => a + b, 0) / deltas.length
-      : 0.04;
-    const maxGap = frameStep * 1.5;
-    const flagged = sorted.filter(f => f.fake_prob >= probThreshold);
-    if (!flagged.length) return [];
-
-    const ranges = [];
-    let start = flagged[0].timestamp;
-    let last = flagged[0].timestamp;
-
-    for (let i = 1; i < flagged.length; i += 1) {
-      const t = flagged[i].timestamp;
-      if (t - last > maxGap) {
-        ranges.push([start, last + frameStep]);
-        start = t;
-      }
-      last = t;
-    }
-    ranges.push([start, last + frameStep]);
-    return ranges.map(([s, e]) => [
-      Math.max(0, s),
-      Math.min(videoMeta.duration || e, e)
-    ]);
-  }, [frames, probThreshold, videoMeta.duration]);
+  const fakeFrames = isFake ? frames.filter(f => f.fake_prob >= probThreshold) : [];
 
   return (
     <div className="container">
@@ -100,14 +67,11 @@ export default function App() {
             src={videoURL}
             controls
             width="720"
-            style={{ height: `${videoDims.height}px` }}
             onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
             onLoadedMetadata={(e) => {
               const videoWidth = e.target.videoWidth || 720;
               const videoHeight = e.target.videoHeight || 405;
-              const duration = e.target.duration || 0;
               const scale = 720 / videoWidth;
-              setVideoMeta({ width: videoWidth, height: videoHeight, duration });
               setVideoDims({ width: 720, height: Math.round(videoHeight * scale) });
             }}
           />
@@ -117,8 +81,6 @@ export default function App() {
               frame={active}
               videoWidth={videoDims.width}
               videoHeight={videoDims.height}
-              sourceWidth={videoMeta.width}
-              sourceHeight={videoMeta.height}
             />
           )}
         </div>
@@ -132,16 +94,28 @@ export default function App() {
       )}
 
       {isFake && (
-        <Timeline
-          segments={segments}
-          totalDuration={videoMeta.duration}
-          onSelect={(t) => {
-            if (videoRef.current) {
-              videoRef.current.currentTime = t;
-            }
-            setCurrentTime(t);
-          }}
-        />
+        <>
+          <Timeline
+            frames={frames}
+            onSelect={(t) => {
+              if (videoRef.current) {
+                videoRef.current.currentTime = t;
+              }
+              setCurrentTime(t);
+            }}
+          />
+
+          {fakeFrames.length > 0 && (
+            <div className="panel">
+              <h3>Detected Lip-Sync Breaks</h3>
+              {fakeFrames.map((f, i) => (
+                <p key={i} className="fake-timestamp">
+                  ⛔ {f.timestamp.toFixed(2)}s — prob {f.fake_prob.toFixed(2)}
+                </p>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

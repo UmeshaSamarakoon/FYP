@@ -27,25 +27,7 @@ body {
   width: 300px;
 }
 
-.timeline {
-  margin-top: 16px;
-}
-
-.timeline-bar {
-  position: relative;
-  width: 720px;
-  height: 18px;
-  background: #eee;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.timeline-segment {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  border: none;
-  background: #b00020;
-  cursor: pointer;
-  padding: 0;
+.fake-timestamp {
+  color: #b00020;
+  font-weight: 600;
 }
