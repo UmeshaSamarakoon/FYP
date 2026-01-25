@@ -1,19 +1,27 @@
-export default function Timeline({ frames, onSelect }) {
+export default function Timeline({ segments, totalDuration, onSelect }) {
+  if (!totalDuration) {
+    return null;
+  }
+
   return (
-    <div style={{ marginTop: "20px" }}>
-      <h4>Causal Timeline</h4>
-      {frames.map((f, i) => (
-        <div
-          key={i}
-          onClick={() => onSelect(f.timestamp)}
-          style={{
-            cursor: "pointer",
-            color: f.fake_prob > 0.6 ? "red" : "black"
-          }}
-        >
-          ⏱ {f.timestamp.toFixed(2)}s — FakeProb: {f.fake_prob.toFixed(2)}
-        </div>
-      ))}
+    <div className="timeline">
+      <h4>Lip-Sync Break Timeline</h4>
+      <div className="timeline-bar">
+        {segments.map((segment, i) => {
+          const [start, end] = segment;
+          const left = (start / totalDuration) * 100;
+          const width = ((end - start) / totalDuration) * 100;
+          return (
+            <button
+              key={`${start}-${end}-${i}`}
+              type="button"
+              className="timeline-segment"
+              style={{ left: `${left}%`, width: `${width}%` }}
+              onClick={() => onSelect(start)}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
