@@ -26,3 +26,8 @@ body {
   border-radius: 5px;
   width: 300px;
 }
+
+.fake-timestamp {
+  color: #b00020;
+  font-weight: 600;
+}
