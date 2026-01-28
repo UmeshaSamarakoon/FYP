@@ -33,7 +33,7 @@ export default function BoundingBoxCanvas({
       ref={canvasRef}
       width={videoWidth}
       height={videoHeight}
-      style={{ position: "absolute", top: 0, left: 0 }}
+      style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }}
     />
   );
 }
