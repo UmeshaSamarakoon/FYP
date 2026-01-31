@@ -5,6 +5,7 @@ import random
 import joblib
 import numpy as np
 import pandas as pd
+import numpy as np
 import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.model_selection import train_test_split
@@ -12,6 +13,7 @@ from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, TensorDataset
 
 from src.modules.causal_fusion import CausalFusionNetwork
+from sklearn.metrics import roc_auc_score, accuracy_score
 
 SEED = 42
 
