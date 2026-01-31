@@ -5,7 +5,7 @@ export default function Timeline({ segments, totalDuration, onSelect }) {
 
   return (
     <div className="timeline">
-      <h4>Lip-Sync Break Timeline</h4>
+      <h4>Causal Link Break Timeline</h4>
       <div className="timeline-bar">
         {segments.map((segment, i) => {
           const [start, end] = segment;
@@ -15,7 +15,7 @@ export default function Timeline({ segments, totalDuration, onSelect }) {
             <button
               key={`${start}-${end}-${i}`}
               type="button"
-              className="timeline-segment"
+              className="timeline-segment timeline-segment--break"
               style={{ left: `${left}%`, width: `${width}%` }}
               onClick={() => onSelect(start)}
             />
