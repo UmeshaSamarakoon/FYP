@@ -1,7 +1,8 @@
 import torch
 import numpy as np
 from pathlib import Path
-from src.cvi.face_bbox_highlighter import detect_face_bbox
+import joblib
+from src.cvi.face_bbox_highlighter import detect_face_bbox, mouth_bbox_from_landmarks
 from src.modules.causal_fusion import CausalFusionNetwork
 from src.cvi.frame_causal_extractor import (
     extract_frame_level_features,
@@ -21,6 +22,11 @@ model = CausalFusionNetwork().to(DEVICE)
 model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
 model.eval()
 
+SCALER_PATH = _MODULE_DIR / "models" / "cfn_scaler.pkl"
+_scaler = None
+if SCALER_PATH.exists():
+    _scaler = joblib.load(SCALER_PATH)
+
 
 # --------------------------------------------------
 # Frame-level CFN inference
@@ -29,6 +35,7 @@ model.eval()
 def run_cfn_on_video(
     video_path,
     threshold=0.6,
+    causal_threshold=None,
     chunk_seconds=10,
     max_seconds=None
 ):
@@ -79,6 +86,10 @@ def run_cfn_on_video(
                 frame.get("jitter_std", 0.0)
             ], dtype=np.float32)
 
+            if _scaler is not None:
+                av_features = _scaler["av"].transform([av_features])[0]
+                phys_features = _scaler["phys"].transform([phys_features])[0]
+
             X_av = torch.tensor(av_features).unsqueeze(0).to(DEVICE)
             X_phys = torch.tensor(phys_features).unsqueeze(0).to(DEVICE)
 
@@ -86,8 +97,13 @@ def run_cfn_on_video(
                 prob = model(X_av, X_phys).item()
 
             bbox = None
-            if prob >= threshold:
-                bbox = detect_face_bbox(frame["frame"])
+            if prob >= threshold or (causal_threshold is not None and av_mismatch[i] >= causal_threshold):
+                bbox = mouth_bbox_from_landmarks(
+                    frame.get("landmarks"),
+                    frame["frame"].shape
+                )
+                if bbox is None:
+                    bbox = detect_face_bbox(frame["frame"])
 
             results.append({
                 "timestamp": frame["timestamp"],
