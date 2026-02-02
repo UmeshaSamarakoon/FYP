@@ -2,6 +2,13 @@ import cv2
 import numpy as np
 import mediapipe as mp
 
+if not hasattr(mp, "solutions"):
+    raise RuntimeError(
+        "MediaPipe import failed: mp.solutions is missing. "
+        "Ensure the official 'mediapipe' package is installed and no local "
+        "file/folder named 'mediapipe' shadows it."
+    )
+
 # Initialize MediaPipe Face Detection ONCE at module load
 mp_face_detection = mp.solutions.face_detection
 

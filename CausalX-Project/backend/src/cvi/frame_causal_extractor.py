@@ -6,6 +6,13 @@ import subprocess
 import tempfile
 import warnings
 
+if not hasattr(mp, "solutions"):
+    raise RuntimeError(
+        "MediaPipe import failed: mp.solutions is missing. "
+        "Ensure the official 'mediapipe' package is installed and no local "
+        "file/folder named 'mediapipe' shadows it."
+    )
+
 mp_face_mesh = mp.solutions.face_mesh
 
 FACE_MESH = mp_face_mesh.FaceMesh(
