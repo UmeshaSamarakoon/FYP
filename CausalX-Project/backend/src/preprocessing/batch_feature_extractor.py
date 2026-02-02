@@ -41,6 +41,11 @@ OUTPUT_CSV = os.path.join(
 # --- 3. CONSTANTS ---
 RIGID_ZONE = [1, 2, 4, 5, 6, 8, 9, 10, 151, 67, 103, 109, 332, 338, 297]
 LIP_TOP, LIP_BOTTOM = 13, 14
+MOUTH_IDX = [
+    61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308,
+    78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415,
+    310, 311, 312, 13, 82, 81, 80, 191
+]
 
 # --- 4. HELPER FUNCTIONS ---
 
@@ -85,7 +90,9 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
     fps = cap.get(cv2.CAP_PROP_FPS)
 
     jitters, lips, times = [], [], []
+    flow_mags = []
     prev_rigid = None
+    prev_mouth_gray = None
     frame_idx = 0
 
     while cap.isOpened():
@@ -122,6 +129,34 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
                 jitters.append(np.mean(np.linalg.norm(rigid - prev_rigid, axis=1)))
             prev_rigid = rigid
 
+            # Mouth ROI optical flow
+            h, w, _ = frame.shape
+            mouth_pts = raw[MOUTH_IDX]
+            xs = np.clip((mouth_pts[:, 0] * w).astype(int), 0, w - 1)
+            ys = np.clip((mouth_pts[:, 1] * h).astype(int), 0, h - 1)
+            x1, x2 = xs.min(), xs.max()
+            y1, y2 = ys.min(), ys.max()
+
+            if x2 > x1 and y2 > y1:
+                mouth_roi = frame[y1:y2, x1:x2]
+                mouth_gray = cv2.cvtColor(mouth_roi, cv2.COLOR_BGR2GRAY)
+                if prev_mouth_gray is not None and prev_mouth_gray.shape == mouth_gray.shape:
+                    flow = cv2.calcOpticalFlowFarneback(
+                        prev_mouth_gray,
+                        mouth_gray,
+                        None,
+                        0.5,
+                        3,
+                        15,
+                        3,
+                        5,
+                        1.2,
+                        0
+                    )
+                    mag = np.sqrt(flow[..., 0] ** 2 + flow[..., 1] ** 2)
+                    flow_mags.append(float(np.mean(mag)))
+                prev_mouth_gray = mouth_gray
+
         frame_idx += 1
 
     cap.release()
@@ -138,12 +173,24 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
         np.correlate(nl - nl.mean(), na - na.mean(), "full")
     ) - (len(nl) - 1)
 
+    lip_velocity = np.diff(nl)
+
     return {
         "jitter_mean": np.mean(jitters) if jitters else 0.0,
         "jitter_std": np.std(jitters) if jitters else 0.0,
         "av_correlation": corr,
         "av_lag_frames": lag,
         "lip_variance": np.std(nl),
+        "lip_mean": float(np.mean(nl)),
+        "lip_std": float(np.std(nl)),
+        "lip_range": float(np.max(nl) - np.min(nl)),
+        "lip_velocity_mean": float(np.mean(lip_velocity)) if lip_velocity.size else 0.0,
+        "lip_velocity_std": float(np.std(lip_velocity)) if lip_velocity.size else 0.0,
+        "audio_rms_mean": float(np.mean(na)),
+        "audio_rms_std": float(np.std(na)),
+        "mouth_flow_mean": float(np.mean(flow_mags)) if flow_mags else 0.0,
+        "mouth_flow_std": float(np.std(flow_mags)) if flow_mags else 0.0,
+        "mouth_flow_max": float(np.max(flow_mags)) if flow_mags else 0.0,
         "det_count": len(lips),
     }
 

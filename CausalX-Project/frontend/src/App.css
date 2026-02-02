@@ -31,3 +31,29 @@ body {
   color: #b00020;
   font-weight: 600;
 }
+
+.timeline {
+  margin-top: 16px;
+  width: 720px;
+}
+
+.timeline-bar {
+  position: relative;
+  height: 16px;
+  background: #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.timeline-segment {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.timeline-segment--break {
+  background: #d32f2f;
+}
