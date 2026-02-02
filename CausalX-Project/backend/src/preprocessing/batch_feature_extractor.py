@@ -41,6 +41,11 @@ OUTPUT_CSV = os.path.join(
 # --- 3. CONSTANTS ---
 RIGID_ZONE = [1, 2, 4, 5, 6, 8, 9, 10, 151, 67, 103, 109, 332, 338, 297]
 LIP_TOP, LIP_BOTTOM = 13, 14
+MOUTH_LANDMARKS = [
+    61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308,
+    78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415,
+    310, 311, 312, 13, 82, 81, 80, 191
+]
 
 # --- 4. HELPER FUNCTIONS ---
 
@@ -67,6 +72,30 @@ def align_landmarks_full(landmarks):
 def normalize(sig):
     return (sig - sig.min()) / (sig.max() - sig.min() + 1e-6)
 
+def mouth_roi_from_landmarks(landmarks, frame_shape, padding=0.1):
+    h, w = frame_shape[:2]
+    mouth_pts = np.array([landmarks[i] for i in MOUTH_LANDMARKS if i < len(landmarks)])
+    if mouth_pts.size == 0:
+        return None
+
+    xs = mouth_pts[:, 0] * w
+    ys = mouth_pts[:, 1] * h
+    x1, x2 = xs.min(), xs.max()
+    y1, y2 = ys.min(), ys.max()
+
+    pad_x = (x2 - x1) * padding
+    pad_y = (y2 - y1) * padding
+
+    x1 = max(0, int(x1 - pad_x))
+    y1 = max(0, int(y1 - pad_y))
+    x2 = min(w - 1, int(x2 + pad_x))
+    y2 = min(h - 1, int(y2 + pad_y))
+
+    if x2 <= x1 or y2 <= y1:
+        return None
+
+    return x1, y1, x2, y2
+
 # --- 5. FEATURE EXTRACTION ---
 
 def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
@@ -85,6 +114,8 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
     fps = cap.get(cv2.CAP_PROP_FPS)
 
     jitters, lips, times = [], [], []
+    mouth_flow_mags = []
+    prev_mouth_gray = None
     prev_rigid = None
     frame_idx = 0
 
@@ -121,6 +152,29 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
             if prev_rigid is not None:
                 jitters.append(np.mean(np.linalg.norm(rigid - prev_rigid, axis=1)))
             prev_rigid = rigid
+
+            roi = mouth_roi_from_landmarks(raw, frame.shape)
+            if roi is not None:
+                x1, y1, x2, y2 = roi
+                mouth = frame[y1:y2, x1:x2]
+                if mouth.size > 0:
+                    mouth_gray = cv2.cvtColor(mouth, cv2.COLOR_BGR2GRAY)
+                    if prev_mouth_gray is not None and mouth_gray.shape == prev_mouth_gray.shape:
+                        flow = cv2.calcOpticalFlowFarneback(
+                            prev_mouth_gray,
+                            mouth_gray,
+                            None,
+                            0.5,
+                            3,
+                            15,
+                            3,
+                            5,
+                            1.2,
+                            0
+                        )
+                        mag = np.linalg.norm(flow, axis=2)
+                        mouth_flow_mags.append(float(np.mean(mag)))
+                    prev_mouth_gray = mouth_gray
 
         frame_idx += 1
 
