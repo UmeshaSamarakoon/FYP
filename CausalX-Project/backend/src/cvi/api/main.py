@@ -34,6 +34,8 @@ async def analyze_video(file: UploadFile = File(...)):
         "video_name": file.filename,
         "video_fake": label,
         "fake_confidence": pipeline_output.get("fake_confidence"),
+        "overall_score": pipeline_output.get("overall_score"),
         "highlight_timestamps": pipeline_output.get("highlight_timestamps", []),
+        "causal_segments": pipeline_output.get("causal_segments", []),
         "frames": frame_results
     }

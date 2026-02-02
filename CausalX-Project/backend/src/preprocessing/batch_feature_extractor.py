@@ -138,12 +138,21 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
         np.correlate(nl - nl.mean(), na - na.mean(), "full")
     ) - (len(nl) - 1)
 
+    lip_velocity = np.diff(nl)
+
     return {
         "jitter_mean": np.mean(jitters) if jitters else 0.0,
         "jitter_std": np.std(jitters) if jitters else 0.0,
         "av_correlation": corr,
         "av_lag_frames": lag,
         "lip_variance": np.std(nl),
+        "lip_mean": float(np.mean(nl)),
+        "lip_std": float(np.std(nl)),
+        "lip_range": float(np.max(nl) - np.min(nl)),
+        "lip_velocity_mean": float(np.mean(lip_velocity)) if lip_velocity.size else 0.0,
+        "lip_velocity_std": float(np.std(lip_velocity)) if lip_velocity.size else 0.0,
+        "audio_rms_mean": float(np.mean(na)),
+        "audio_rms_std": float(np.std(na)),
         "det_count": len(lips),
     }
 
