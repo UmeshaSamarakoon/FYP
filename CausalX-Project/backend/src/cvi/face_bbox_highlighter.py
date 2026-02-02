@@ -10,7 +10,7 @@ if not hasattr(mp, "solutions"):
     )
 
 # Initialize MediaPipe Face Detection ONCE at module load
-mp_face_detection = mp.solutions.face_detection
+mp_face_detection = mp_solutions.face_detection
 
 _face_detector = mp_face_detection.FaceDetection(
     model_selection=0,
