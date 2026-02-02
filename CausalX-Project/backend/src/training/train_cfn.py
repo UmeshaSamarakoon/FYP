@@ -72,6 +72,8 @@ def eval_epoch(model, loader, criterion, device):
             label = label.to(device)
             preds = model(av, phys)
             loss = criterion(preds, label)
+            if loss.dim() > 0:
+                loss = loss.mean()
             total_loss += loss.item()
             all_preds.extend(preds.squeeze(1).cpu().numpy().tolist())
             all_labels.extend(label.squeeze(1).cpu().numpy().tolist())
@@ -89,7 +91,13 @@ def eval_epoch(model, loader, criterion, device):
 
 def main():
     parser = argparse.ArgumentParser(description="Train Causal Fusion Network (CFN).")
-    parser.add_argument("--data", default="data/processed/causal_multimodal_dataset.csv")
+    parser.add_argument(
+        "--data",
+        "--dataset-csv",
+        dest="data",
+        default="data/processed/causal_multimodal_dataset.csv",
+        help="Path to the dataset CSV (default: data/processed/causal_multimodal_dataset.csv)",
+    )
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
