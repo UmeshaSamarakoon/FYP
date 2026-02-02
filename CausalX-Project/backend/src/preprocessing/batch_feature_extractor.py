@@ -207,8 +207,6 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
         "lip_velocity_std": float(np.std(lip_velocity)) if lip_velocity.size else 0.0,
         "audio_rms_mean": float(np.mean(na)),
         "audio_rms_std": float(np.std(na)),
-        "mouth_flow_mean": float(np.mean(mouth_flow_mags)) if mouth_flow_mags else 0.0,
-        "mouth_flow_std": float(np.std(mouth_flow_mags)) if mouth_flow_mags else 0.0,
         "det_count": len(lips),
     }
 
