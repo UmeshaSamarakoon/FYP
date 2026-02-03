@@ -6,7 +6,19 @@ import tempfile
 import warnings
 import mediapipe as mp
 
-mp_face_mesh = mp.solutions.face_mesh
+try:
+    mp_solutions = mp.solutions
+except AttributeError:
+    try:
+        from mediapipe.python import solutions as mp_solutions
+    except Exception as exc:
+        raise RuntimeError(
+            "MediaPipe import failed: mp.solutions is missing. "
+            "Ensure the official 'mediapipe' package is installed and no local "
+            "file/folder named 'mediapipe' shadows it."
+        ) from exc
+
+mp_face_mesh = mp_solutions.face_mesh
 
 FACE_MESH = mp_face_mesh.FaceMesh(
     static_image_mode=False,
