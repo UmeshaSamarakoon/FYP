@@ -1,12 +1,21 @@
 import argparse
 import os
 import random
+
+import joblib
+import numpy as np
 import pandas as pd
 import numpy as np
 import torch
+from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, TensorDataset
+
 from src.modules.causal_fusion import CausalFusionNetwork
 from sklearn.metrics import roc_auc_score, accuracy_score
+
+SEED = 42
 
 
 def set_seed(seed):
@@ -16,24 +25,115 @@ def set_seed(seed):
     torch.cuda.manual_seed_all(seed)
 
 
-def standardize(train, val):
-    mean = train.mean(axis=0)
-    std = train.std(axis=0) + 1e-6
-    return (train - mean) / std, (val - mean) / std
+def build_loaders(X_av, X_phys, y, weights, batch_size, shuffle=True):
+    if weights is None:
+        dataset = TensorDataset(X_av, X_phys, y)
+    else:
+        dataset = TensorDataset(X_av, X_phys, y, weights)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+    return loader
 
 
-def build_loaders(av_feats, phys_feats, labels, batch_size, val_split):
-    n = len(labels)
-    indices = np.random.permutation(n)
-    split = int(n * (1 - val_split))
-    train_idx, val_idx = indices[:split], indices[split:]
+def train_epoch(model, loader, criterion, optimizer, device, use_weights=False):
+    model.train()
+    total_loss = 0.0
+    for batch in loader:
+        if use_weights:
+            av, phys, label, weight = batch
+            weight = weight.to(device)
+        else:
+            av, phys, label = batch
+        av = av.to(device)
+        phys = phys.to(device)
+        label = label.to(device)
 
-    X_av_train, X_av_val = av_feats[train_idx], av_feats[val_idx]
-    X_phys_train, X_phys_val = phys_feats[train_idx], phys_feats[val_idx]
-    y_train, y_val = labels[train_idx], labels[val_idx]
+        optimizer.zero_grad()
+        preds = model(av, phys)
+        if use_weights:
+            raw_loss = criterion(preds, label)
+            loss = (raw_loss * weight).mean()
+        else:
+            loss = criterion(preds, label)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+    return total_loss / max(len(loader), 1)
 
-    X_av_train, X_av_val = standardize(X_av_train, X_av_val)
-    X_phys_train, X_phys_val = standardize(X_phys_train, X_phys_val)
+
+def eval_epoch(model, loader, criterion, device):
+    model.eval()
+    total_loss = 0.0
+    all_preds = []
+    all_labels = []
+    with torch.no_grad():
+        for av, phys, label in loader:
+            av = av.to(device)
+            phys = phys.to(device)
+            label = label.to(device)
+            preds = model(av, phys)
+            loss = criterion(preds, label)
+            if loss.dim() > 0:
+                loss = loss.mean()
+            total_loss += loss.item()
+            all_preds.extend(preds.squeeze(1).cpu().numpy().tolist())
+            all_labels.extend(label.squeeze(1).cpu().numpy().tolist())
+
+    if not all_labels:
+        return 0.0, 0.0, 0.0
+
+    acc = accuracy_score(all_labels, [1 if p >= 0.5 else 0 for p in all_preds])
+    try:
+        auc = roc_auc_score(all_labels, all_preds)
+    except ValueError:
+        auc = 0.0
+    return total_loss / max(len(loader), 1), acc, auc
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Train Causal Fusion Network (CFN).")
+    parser.add_argument(
+        "--data",
+        "--dataset-csv",
+        dest="data",
+        default="data/processed/causal_multimodal_dataset.csv",
+        help="Path to the dataset CSV (default: data/processed/causal_multimodal_dataset.csv)",
+    )
+    parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--weight-decay", type=float, default=1e-4)
+    parser.add_argument("--patience", type=int, default=5)
+    parser.add_argument("--val-split", type=float, default=0.2)
+    parser.add_argument("--model-dir", default="models")
+    parser.add_argument("--use-scaler", action="store_true")
+    args = parser.parse_args()
+
+    set_seed(SEED)
+
+    df = pd.read_csv(args.data)
+    av_feats = df[["lip_variance", "av_correlation", "av_lag_frames"]].values
+    phys_feats = df[["jitter_mean", "jitter_std"]].values
+    labels = df["label"].values
+
+    X_av_train, X_av_val, X_phys_train, X_phys_val, y_train, y_val = train_test_split(
+        av_feats,
+        phys_feats,
+        labels,
+        test_size=args.val_split,
+        random_state=SEED,
+        stratify=labels if len(np.unique(labels)) > 1 else None
+    )
+
+    scaler = None
+    if args.use_scaler:
+        scaler = {
+            "av": StandardScaler().fit(X_av_train),
+            "phys": StandardScaler().fit(X_phys_train)
+        }
+        X_av_train = scaler["av"].transform(X_av_train)
+        X_av_val = scaler["av"].transform(X_av_val)
+        X_phys_train = scaler["phys"].transform(X_phys_train)
+        X_phys_val = scaler["phys"].transform(X_phys_val)
 
     X_av_train = torch.tensor(X_av_train, dtype=torch.float32)
     X_phys_train = torch.tensor(X_phys_train, dtype=torch.float32)
@@ -43,175 +143,85 @@ def build_loaders(av_feats, phys_feats, labels, batch_size, val_split):
     X_phys_val = torch.tensor(X_phys_val, dtype=torch.float32)
     y_val = torch.tensor(y_val, dtype=torch.float32).unsqueeze(1)
 
-    train_ds = TensorDataset(X_av_train, X_phys_train, y_train)
-    val_ds = TensorDataset(X_av_val, X_phys_val, y_val)
+    sample_weights = None
+    use_weights = False
+    if len(np.unique(labels)) > 1:
+        class_counts = np.bincount(labels.astype(int))
+        class_weights = class_counts.sum() / np.maximum(class_counts, 1)
+        sample_weights = torch.tensor(
+            [class_weights[int(l)] for l in y_train.squeeze(1).numpy()],
+            dtype=torch.float32
+        ).unsqueeze(1)
+        use_weights = True
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
-    return train_loader, val_loader
-
-
-def compute_pos_weight(labels):
-    labels = labels.astype(np.float32)
-    pos = labels.sum()
-    neg = len(labels) - pos
-    if pos == 0 or neg == 0:
-        return 1.0
-    return float(neg / pos)
-
-
-def resolve_dataset_csv(args):
-    if args.dataset_csv:
-        return args.dataset_csv
-    if args.data:
-        print("⚠️  --data is deprecated; use --dataset-csv instead.")
-        return args.data
-    raise ValueError("No dataset CSV provided. Use --dataset-csv path/to.csv")
-
-
-AV_FEATURES = [
-    "lip_variance",
-    "av_correlation",
-    "av_lag_frames",
-    "lip_mean",
-    "lip_std",
-    "lip_range",
-    "lip_velocity_mean",
-    "lip_velocity_std",
-    "audio_rms_mean",
-    "audio_rms_std",
-    "mouth_flow_mean",
-    "mouth_flow_std"
-]
-
-PHYS_FEATURES = [
-    "jitter_mean",
-    "jitter_std"
-]
-
-
-def build_feature_matrix(df, columns):
-    missing = [c for c in columns if c not in df.columns]
-    if missing:
-        for c in missing:
-            df[c] = 0.0
-        print(f"⚠️  Missing columns {missing}; filled with 0.0. Regenerate features for best accuracy.")
-    return df[columns].values
-
-
-def train(args):
-    set_seed(args.seed)
-
-    dataset_csv = resolve_dataset_csv(args)
-    df = pd.read_csv(dataset_csv)
-    av_feats = build_feature_matrix(df, AV_FEATURES)
-    phys_feats = build_feature_matrix(df, PHYS_FEATURES)
-    labels = df["label"].values.astype(np.float32)
-
-    train_loader, val_loader = build_loaders(
-        av_feats,
-        phys_feats,
-        labels,
+    train_loader = build_loaders(
+        X_av_train,
+        X_phys_train,
+        y_train,
+        sample_weights,
         args.batch_size,
-        args.val_split
+        shuffle=True
+    )
+    val_loader = build_loaders(
+        X_av_val,
+        X_phys_val,
+        y_val,
+        None,
+        args.batch_size,
+        shuffle=False
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = CausalFusionNetwork().to(device)
+
+    if use_weights:
+        criterion = torch.nn.BCELoss(reduction="none")
+    else:
+        criterion = torch.nn.BCELoss()
+
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
-    scaler = torch.cuda.amp.GradScaler(enabled=device.type == "cuda")
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.5, patience=2)
 
-    pos_weight = compute_pos_weight(labels)
+    best_auc = -1.0
+    epochs_no_improve = 0
 
-    best_val = float("inf")
-    patience_counter = 0
+    os.makedirs(args.model_dir, exist_ok=True)
+    model_path = os.path.join(args.model_dir, "cfn.pth")
+    scaler_path = os.path.join(args.model_dir, "cfn_scaler.pkl")
 
     for epoch in range(args.epochs):
-        model.train()
-        total_loss = 0.0
-
-        for av, phys, label in train_loader:
-            av = av.to(device)
-            phys = phys.to(device)
-            label = label.to(device)
-
-            optimizer.zero_grad()
-            with torch.cuda.amp.autocast(enabled=device.type == "cuda"):
-                preds = model(av, phys)
-                batch_weights = torch.where(label == 1, pos_weight, 1.0).to(device)
-                loss = torch.nn.functional.binary_cross_entropy(preds, label, weight=batch_weights)
-
-            scaler.scale(loss).backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=args.grad_clip)
-            scaler.step(optimizer)
-            scaler.update()
-            total_loss += loss.item()
-
-        scheduler.step()
-
-        model.eval()
-        val_loss = 0.0
-        val_probs = []
-        val_targets = []
-        with torch.no_grad():
-            for av, phys, label in val_loader:
-                av = av.to(device)
-                phys = phys.to(device)
-                label = label.to(device)
-                preds = model(av, phys)
-                loss = torch.nn.functional.binary_cross_entropy(preds, label)
-                val_loss += loss.item()
-                val_probs.append(preds.detach().cpu().numpy())
-                val_targets.append(label.detach().cpu().numpy())
-
-        avg_train = total_loss / max(1, len(train_loader))
-        avg_val = val_loss / max(1, len(val_loader))
-        val_probs = np.concatenate(val_probs, axis=0).reshape(-1)
-        val_targets = np.concatenate(val_targets, axis=0).reshape(-1)
-        val_preds = (val_probs >= 0.5).astype(np.float32)
-        try:
-            val_auc = roc_auc_score(val_targets, val_probs)
-        except ValueError:
-            val_auc = float("nan")
-        val_acc = accuracy_score(val_targets, val_preds)
+        train_loss = train_epoch(model, train_loader, criterion, optimizer, device, use_weights=use_weights)
+        val_loss, val_acc, val_auc = eval_epoch(model, val_loader, criterion, device)
+        scheduler.step(val_auc)
 
         print(
-            f"Epoch {epoch+1:02d} | train_loss={avg_train:.4f} "
-            f"val_loss={avg_val:.4f} val_acc={val_acc:.3f} val_auc={val_auc:.3f}"
+            f"Epoch {epoch + 1:02d} | "
+            f"train_loss={train_loss:.4f} "
+            f"val_loss={val_loss:.4f} "
+            f"val_acc={val_acc:.3f} "
+            f"val_auc={val_auc:.3f}"
         )
 
-        if avg_val < best_val - args.min_delta:
-            best_val = avg_val
-            patience_counter = 0
-            os.makedirs(args.model_dir, exist_ok=True)
-            model_path = os.path.join(args.model_dir, args.model_name)
+        if val_auc > best_auc:
+            best_auc = val_auc
+            epochs_no_improve = 0
             torch.save(model.state_dict(), model_path)
-            print(f"✔ Saved best model to {model_path}")
+            if scaler is not None:
+                joblib.dump(scaler, scaler_path)
         else:
-            patience_counter += 1
-            if patience_counter >= args.patience:
-                print("Early stopping triggered.")
-                break
+            epochs_no_improve += 1
 
+        if epochs_no_improve >= args.patience:
+            print("Early stopping triggered.")
+            break
+
+    print("Best AUC:", best_auc)
     print("Learned alpha (AV causal weight):", model.alpha.item())
     print("Learned beta (Physical causal weight):", model.beta.item())
+    print(f"✔ CFN model saved to {model_path}")
+    if scaler is not None:
+        print(f"✔ Scaler saved to {scaler_path}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train CFN model with efficient techniques.")
-    parser.add_argument("--dataset-csv", default="data/processed/causal_multimodal_dataset.csv")
-    parser.add_argument("--data", default=None, help="Deprecated alias for --dataset-csv.")
-    parser.add_argument("--model-dir", default="models")
-    parser.add_argument("--model-name", default="cfn.pth")
-    parser.add_argument("--epochs", type=int, default=30)
-    parser.add_argument("--batch-size", type=int, default=128)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--weight-decay", type=float, default=1e-4)
-    parser.add_argument("--val-split", type=float, default=0.2)
-    parser.add_argument("--patience", type=int, default=5)
-    parser.add_argument("--min-delta", type=float, default=1e-4)
-    parser.add_argument("--grad-clip", type=float, default=1.0)
-    parser.add_argument("--seed", type=int, default=42)
-    args = parser.parse_args()
-    train(args)
+    main()
