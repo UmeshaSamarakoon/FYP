@@ -4,17 +4,9 @@ import librosa
 import subprocess
 import tempfile
 import warnings
+import mediapipe as mp
 
-# Import mediapipe solutions directly; fail fast with a clear error.
-try:
-    from mediapipe import solutions as mp_solutions
-except Exception as exc:  # pragma: no cover
-    raise RuntimeError(
-        "MediaPipe import failed. Ensure the official 'mediapipe' package is installed "
-        "and no local file/folder named 'mediapipe' shadows it."
-    ) from exc
-
-mp_face_mesh = mp_solutions.face_mesh
+mp_face_mesh = mp.solutions.face_mesh
 
 FACE_MESH = mp_face_mesh.FaceMesh(
     static_image_mode=False,
