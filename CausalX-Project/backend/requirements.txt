@@ -16,3 +16,4 @@ fastapi
 uvicorn
 matplotlib
 seaborn
+python-multipart
