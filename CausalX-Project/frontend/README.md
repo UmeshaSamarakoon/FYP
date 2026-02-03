@@ -1,5 +1,26 @@
 # React + Vite
 
+## Backend connection
+
+The frontend calls the FastAPI backend using `VITE_API_BASE_URL`. Define it in a
+local `.env` file or in your hosting provider's environment settings.
+
+### Local development
+
+Create `frontend/.env`:
+
+```
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+### Render deployment
+
+Set the environment variable in the Render Static Site settings:
+
+```
+VITE_API_BASE_URL=https://<your-backend-service>.onrender.com
+```
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
