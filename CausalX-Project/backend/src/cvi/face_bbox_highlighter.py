@@ -1,13 +1,67 @@
 import cv2
+import numpy as np
 import mediapipe as mp
 
+try:
+    mp_solutions = mp.solutions
+except AttributeError:
+    try:
+        from mediapipe.python import solutions as mp_solutions
+    except Exception as exc:
+        raise RuntimeError(
+            "MediaPipe import failed: mp.solutions is missing. "
+            "Ensure the official 'mediapipe' package is installed and no local "
+            "file/folder named 'mediapipe' shadows it."
+        ) from exc
+
 # Initialize MediaPipe Face Detection ONCE at module load
-mp_face_detection = mp.solutions.face_detection
+mp_face_detection = mp_solutions.face_detection
 
 _face_detector = mp_face_detection.FaceDetection(
     model_selection=0,
     min_detection_confidence=0.5
 )
+
+MOUTH_LANDMARKS = [
+    61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308,
+    78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415,
+    310, 311, 312, 13, 82, 81, 80, 191
+]
+
+
+def mouth_bbox_from_landmarks(landmarks, frame_shape, padding=0.05):
+    """
+    Returns a mouth-region bbox [x1, y1, x2, y2] using normalized landmarks.
+    """
+    if landmarks is None or frame_shape is None:
+        return None
+
+    h, w, _ = frame_shape
+    if len(landmarks) == 0:
+        return None
+
+    mouth_pts = np.array([landmarks[i] for i in MOUTH_LANDMARKS if i < len(landmarks)])
+    if mouth_pts.size == 0:
+        return None
+
+    xs = mouth_pts[:, 0] * w
+    ys = mouth_pts[:, 1] * h
+
+    x1, x2 = xs.min(), xs.max()
+    y1, y2 = ys.min(), ys.max()
+
+    pad_x = (x2 - x1) * padding
+    pad_y = (y2 - y1) * padding
+
+    x1 = max(0, int(x1 - pad_x))
+    y1 = max(0, int(y1 - pad_y))
+    x2 = min(w - 1, int(x2 + pad_x))
+    y2 = min(h - 1, int(y2 + pad_y))
+
+    if x2 <= x1 or y2 <= y1:
+        return None
+
+    return [x1, y1, x2, y2]
 
 
 def detect_face_bbox(frame):
