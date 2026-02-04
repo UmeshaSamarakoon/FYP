@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import numpy as np
 import torch
-from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.metrics import accuracy_score, roc_auc_score, precision_recall_curve, auc
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, TensorDataset
@@ -79,14 +79,42 @@ def eval_epoch(model, loader, criterion, device):
             all_labels.extend(label.squeeze(1).cpu().numpy().tolist())
 
     if not all_labels:
-        return 0.0, 0.0, 0.0
+        return 0.0, 0.0, 0.0, [], []
 
     acc = accuracy_score(all_labels, [1 if p >= 0.5 else 0 for p in all_preds])
     try:
-        auc = roc_auc_score(all_labels, all_preds)
+        auc_val = roc_auc_score(all_labels, all_preds)
     except ValueError:
-        auc = 0.0
-    return total_loss / max(len(loader), 1), acc, auc
+        auc_val = 0.0
+    return total_loss / max(len(loader), 1), acc, auc_val, all_labels, all_preds
+
+
+def threshold_sweep(labels, probs):
+    """
+    Sweep thresholds to find best F1 and report PR AUC.
+    """
+    labels = np.array(labels)
+    probs = np.array(probs)
+    if probs.size == 0 or labels.size == 0:
+        return {"pr_auc": 0.0, "best_f1": 0.0, "best_thr": 0.5}
+
+    prec, rec, thr = precision_recall_curve(labels, probs)
+    pr_auc = auc(rec, prec)
+
+    best_f1, best_thr = 0.0, 0.5
+    thresholds = np.linspace(probs.min(), probs.max(), 50) if probs.size else [0.5]
+    for t in thresholds:
+        preds = (probs >= t).astype(int)
+        tp = ((preds == 1) & (labels == 1)).sum()
+        fp = ((preds == 1) & (labels == 0)).sum()
+        fn = ((preds == 0) & (labels == 1)).sum()
+        precision = tp / (tp + fp + 1e-8)
+        recall = tp / (tp + fn + 1e-8)
+        f1 = 2 * precision * recall / (precision + recall + 1e-8)
+        if f1 > best_f1:
+            best_f1, best_thr = f1, t
+
+    return {"pr_auc": pr_auc, "best_f1": best_f1, "best_thr": best_thr}
 
 
 def main():
@@ -202,7 +230,8 @@ def main():
 
     for epoch in range(args.epochs):
         train_loss = train_epoch(model, train_loader, criterion, optimizer, device, use_weights=use_weights)
-        val_loss, val_acc, val_auc = eval_epoch(model, val_loader, criterion, device)
+        val_loss, val_acc, val_auc, val_labels, val_probs = eval_epoch(model, val_loader, criterion, device)
+        sweep = threshold_sweep(val_labels, val_probs)
         scheduler.step(val_auc)
 
         print(
@@ -210,7 +239,10 @@ def main():
             f"train_loss={train_loss:.4f} "
             f"val_loss={val_loss:.4f} "
             f"val_acc={val_acc:.3f} "
-            f"val_auc={val_auc:.3f}"
+            f"val_auc={val_auc:.3f} "
+            f"pr_auc={sweep['pr_auc']:.3f} "
+            f"best_f1={sweep['best_f1']:.3f} "
+            f"best_thr={sweep['best_thr']:.3f}"
         )
 
         if val_auc > best_auc:
