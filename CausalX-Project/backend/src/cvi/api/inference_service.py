@@ -14,6 +14,7 @@ RATIO_THRESH = float(os.getenv("CFN_RATIO_THRESH", "0.3"))
 SMOOTH_WINDOW = int(os.getenv("CFN_SMOOTH_WINDOW", "5"))
 CHUNK_SECONDS = int(os.getenv("CFN_CHUNK_SECONDS", "10"))
 CAUSAL_THRESH = float(os.getenv("CFN_CAUSAL_THRESH", "0.6"))
+ENABLE_SCM_CHECKS = os.getenv("CFN_ENABLE_SCM_CHECKS", "false").lower() == "true"
 MAX_SECONDS_ENV = os.getenv("CFN_MAX_SECONDS")
 MAX_SECONDS = float(MAX_SECONDS_ENV) if MAX_SECONDS_ENV else None
 

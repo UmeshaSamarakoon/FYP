@@ -50,6 +50,27 @@ python -m src.training.train_cfn \
 ### 3) Use the new model
 Restart the API server so it reloads the updated weights.
 
+## Embedding-aware training (TCN + Wav2Vec2)
+If you have generated embedding columns (`tcn_visual_emb`, `wav2vec_audio_emb`) in the CSV,
+train the V2 CFN model with:
+
+```
+python -m src.training.train_cfn \
+  --dataset-csv data/processed/causal_multimodal_dataset.csv \
+  --use-embeddings \
+  --epochs 30 \
+  --batch-size 128 \
+  --lr 1e-3 \
+  --weight-decay 1e-4
+```
+
+This writes `models/cfn_emb.pth`. Enable it during inference by setting:
+- `CFN_USE_EMBEDDINGS=true`
+- `CFN_EMB_MODEL_PATH=models/cfn_emb.pth`
+
+Optional SCM dependency score:
+- `CFN_ENABLE_SCM_CHECKS=true`
+
 ## Deployment note (Render)
 If you deploy the backend as a Render service, keep `runtime.txt` in this `backend/` directory so Render pins the Python version for the service root.
 

@@ -29,6 +29,7 @@ from src.utils.dataset_registry import (
     get_dfdc_videos,
     get_fakeavceleb_videos
 )
+from src.cvi.pipeline import FeatureExtractor
 
 # --- 2. OUTPUT PATH ---
 OUTPUT_CSV = os.path.join(
@@ -97,6 +98,13 @@ def mouth_roi_from_landmarks(landmarks, frame_shape, padding=0.1):
     return x1, y1, x2, y2
 
 # --- 5. FEATURE EXTRACTION ---
+
+def _safe_float(value, fallback=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback
+
 
 def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
     # AUDIO
@@ -204,6 +212,23 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
 
     lip_velocity = np.diff(nl)
 
+    feature_extractor = FeatureExtractor()
+    visual_embedding_scalar = 0.0
+    audio_embedding_scalar = 0.0
+    if len(lips) > 0:
+        try:
+            visual_embedding = feature_extractor.get_visual_embeddings(
+                np.array(lips, dtype=np.float32)
+            )
+            visual_embedding_scalar = _safe_float(np.mean(visual_embedding))
+        except Exception:
+            visual_embedding_scalar = 0.0
+    try:
+        audio_embedding = feature_extractor.get_audio_embeddings(y, sr)
+        audio_embedding_scalar = _safe_float(np.mean(audio_embedding))
+    except Exception:
+        audio_embedding_scalar = 0.0
+
     return {
         "jitter_mean": np.mean(jitters) if jitters else 0.0,
         "jitter_std": np.std(jitters) if jitters else 0.0,
@@ -219,6 +244,8 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
         "audio_rms_std": float(np.std(na)),
         "mouth_flow_mean": float(np.mean(mouth_flow_mags)) if mouth_flow_mags else 0.0,
         "mouth_flow_std": float(np.std(mouth_flow_mags)) if mouth_flow_mags else 0.0,
+        "tcn_visual_emb": visual_embedding_scalar,
+        "wav2vec_audio_emb": audio_embedding_scalar,
         "det_count": len(lips),
     }
 

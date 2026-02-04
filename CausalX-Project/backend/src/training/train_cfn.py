@@ -12,7 +12,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, TensorDataset
 
-from src.modules.causal_fusion import CausalFusionNetwork
+from src.modules.causal_fusion import CausalFusionNetwork, CausalFusionNetworkV2
 from sklearn.metrics import roc_auc_score, accuracy_score
 
 SEED = 42
@@ -106,12 +106,20 @@ def main():
     parser.add_argument("--val-split", type=float, default=0.2)
     parser.add_argument("--model-dir", default="models")
     parser.add_argument("--use-scaler", action="store_true")
+    parser.add_argument(
+        "--use-embeddings",
+        action="store_true",
+        help="Include TCN/Wav2Vec2 embedding columns and train CFN V2.",
+    )
     args = parser.parse_args()
 
     set_seed(SEED)
 
     df = pd.read_csv(args.data)
-    av_feats = df[["lip_variance", "av_correlation", "av_lag_frames"]].values
+    av_feature_cols = ["lip_variance", "av_correlation", "av_lag_frames"]
+    if args.use_embeddings:
+        av_feature_cols.extend(["tcn_visual_emb", "wav2vec_audio_emb"])
+    av_feats = df[av_feature_cols].values
     phys_feats = df[["jitter_mean", "jitter_std"]].values
     labels = df["label"].values
 
@@ -172,7 +180,10 @@ def main():
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = CausalFusionNetwork().to(device)
+    if args.use_embeddings:
+        model = CausalFusionNetworkV2(av_dim=X_av_train.shape[1], phys_dim=X_phys_train.shape[1]).to(device)
+    else:
+        model = CausalFusionNetwork().to(device)
 
     if use_weights:
         criterion = torch.nn.BCELoss(reduction="none")
@@ -186,7 +197,7 @@ def main():
     epochs_no_improve = 0
 
     os.makedirs(args.model_dir, exist_ok=True)
-    model_path = os.path.join(args.model_dir, "cfn.pth")
+    model_path = os.path.join(args.model_dir, "cfn_emb.pth" if args.use_embeddings else "cfn.pth")
     scaler_path = os.path.join(args.model_dir, "cfn_scaler.pkl")
 
     for epoch in range(args.epochs):
