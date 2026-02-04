@@ -7,7 +7,6 @@ opencv-python
 librosa
 soundfile
 audioread
-mediapipe==0.10.32
 mediapipe==0.10.9
 torch
 torchvision
