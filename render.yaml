@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: causalx-backend
+    env: python
+    rootDir: CausalX-Project/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn src.cvi.api.main:app --host 0.0.0.0 --port $PORT
+  - type: web
+    name: causalx-frontend
+    env: static
+    rootDir: CausalX-Project/frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
