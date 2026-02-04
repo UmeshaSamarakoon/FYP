@@ -1,5 +1,13 @@
 import os
-from src.cvi.pipeline import CausalInferenceEngine, InferenceController
+from src.cvi.pipeline import (
+    CausalInferenceEngine,
+    InferenceController,
+    smooth_fake_probs,
+    summarize_video,
+    add_causal_breaks,
+    build_segments,
+    overall_video_score,
+)
 
 PROB_THRESH = float(os.getenv("CFN_PROB_THRESH", "0.6"))
 RATIO_THRESH = float(os.getenv("CFN_RATIO_THRESH", "0.3"))
@@ -18,7 +26,6 @@ def build_inference_controller() -> InferenceController:
         chunk_seconds=CHUNK_SECONDS,
         causal_thresh=CAUSAL_THRESH,
         max_seconds=MAX_SECONDS,
-        enable_scm_checks=ENABLE_SCM_CHECKS,
     )
     return InferenceController(engine=engine)
 
