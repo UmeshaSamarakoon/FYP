@@ -19,16 +19,6 @@ app.add_middleware(
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@app.get("/")
-async def root():
-    return {"status": "ok", "service": "cvi-api"}
-
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-
-
 @app.on_event("startup")
 def startup_worker():
     worker.start()
