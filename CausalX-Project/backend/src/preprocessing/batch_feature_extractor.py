@@ -41,6 +41,12 @@ OUTPUT_CSV = os.path.join(
 # --- 3. CONSTANTS ---
 RIGID_ZONE = [1, 2, 4, 5, 6, 8, 9, 10, 151, 67, 103, 109, 332, 338, 297]
 LIP_TOP, LIP_BOTTOM = 13, 14
+MOUTH_LEFT, MOUTH_RIGHT = 61, 291
+MOUTH_LANDMARKS = [
+    61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308,
+    78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415,
+    310, 311, 312, 13, 82, 81, 80, 191
+]
 
 # --- 4. HELPER FUNCTIONS ---
 
@@ -67,6 +73,56 @@ def align_landmarks_full(landmarks):
 def normalize(sig):
     return (sig - sig.min()) / (sig.max() - sig.min() + 1e-6)
 
+def mouth_roi_from_landmarks(landmarks, frame_shape, padding=0.1):
+    h, w = frame_shape[:2]
+    mouth_pts = np.array([landmarks[i] for i in MOUTH_LANDMARKS if i < len(landmarks)])
+    if mouth_pts.size == 0:
+        return None
+
+    xs = mouth_pts[:, 0] * w
+    ys = mouth_pts[:, 1] * h
+    x1, x2 = xs.min(), xs.max()
+    y1, y2 = ys.min(), ys.max()
+
+    pad_x = (x2 - x1) * padding
+    pad_y = (y2 - y1) * padding
+
+    x1 = max(0, int(x1 - pad_x))
+    y1 = max(0, int(y1 - pad_y))
+    x2 = min(w - 1, int(x2 + pad_x))
+    y2 = min(h - 1, int(y2 + pad_y))
+
+    if x2 <= x1 or y2 <= y1:
+        return None
+
+    return x1, y1, x2, y2
+
+def windowed_corr_stats(sig_a, sig_b, times, window_s):
+    if len(sig_a) < 3:
+        return 0.0, 0.0
+    if window_s <= 0:
+        return 0.0, 0.0
+
+    time_arr = np.array(times)
+    corrs = []
+    start = time_arr.min()
+    end = time_arr.max()
+    t = start
+    while t < end:
+        mask = (time_arr >= t) & (time_arr < t + window_s)
+        if np.count_nonzero(mask) >= 3:
+            window_a = sig_a[mask]
+            window_b = sig_b[mask]
+            if np.std(window_a) > 1e-6 and np.std(window_b) > 1e-6:
+                corr, _ = pearsonr(window_a, window_b)
+                corrs.append(corr)
+        t += window_s
+
+    if not corrs:
+        return 0.0, 0.0
+
+    return float(np.mean(corrs)), float(np.std(corrs))
+
 # --- 5. FEATURE EXTRACTION ---
 
 def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
@@ -77,6 +133,8 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
         audio_times = librosa.frames_to_time(
             np.arange(len(audio_rms)), sr=sr, hop_length=512
         )
+        spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
+        onset_strength = librosa.onset.onset_strength(y=y, sr=sr)
     except Exception:
         return None
 
@@ -84,7 +142,9 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
 
-    jitters, lips, times = [], [], []
+    jitters, lips, mouth_aspects, times = [], [], [], []
+    mouth_flow_mags = []
+    prev_mouth_gray = None
     prev_rigid = None
     frame_idx = 0
 
@@ -115,12 +175,40 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
             aligned = align_landmarks_full(raw)
 
             lips.append(np.linalg.norm(aligned[LIP_TOP] - aligned[LIP_BOTTOM]))
+            if len(aligned) > max(MOUTH_LEFT, MOUTH_RIGHT):
+                mouth_width = np.linalg.norm(aligned[MOUTH_LEFT] - aligned[MOUTH_RIGHT])
+                mouth_aspects.append(
+                    float(lips[-1] / (mouth_width + 1e-6))
+                )
             times.append(frame_idx / fps)
 
             rigid = aligned[RIGID_ZONE]
             if prev_rigid is not None:
                 jitters.append(np.mean(np.linalg.norm(rigid - prev_rigid, axis=1)))
             prev_rigid = rigid
+
+            roi = mouth_roi_from_landmarks(raw, frame.shape)
+            if roi is not None:
+                x1, y1, x2, y2 = roi
+                mouth = frame[y1:y2, x1:x2]
+                if mouth.size > 0:
+                    mouth_gray = cv2.cvtColor(mouth, cv2.COLOR_BGR2GRAY)
+                    if prev_mouth_gray is not None and mouth_gray.shape == prev_mouth_gray.shape:
+                        flow = cv2.calcOpticalFlowFarneback(
+                            prev_mouth_gray,
+                            mouth_gray,
+                            None,
+                            0.5,
+                            3,
+                            15,
+                            3,
+                            5,
+                            1.2,
+                            0
+                        )
+                        mag = np.linalg.norm(flow, axis=2)
+                        mouth_flow_mags.append(float(np.mean(mag)))
+                    prev_mouth_gray = mouth_gray
 
         frame_idx += 1
 
@@ -132,11 +220,16 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
     # AV SYNC
     audio_sync = np.interp(times, audio_times, audio_rms)
     nl, na = normalize(np.array(lips)), normalize(audio_sync)
+    corr_05_mean, corr_05_std = windowed_corr_stats(nl, na, times, 0.5)
+    corr_10_mean, corr_10_std = windowed_corr_stats(nl, na, times, 1.0)
+    corr_20_mean, corr_20_std = windowed_corr_stats(nl, na, times, 2.0)
 
     corr, _ = pearsonr(nl, na)
     lag = np.argmax(
         np.correlate(nl - nl.mean(), na - na.mean(), "full")
     ) - (len(nl) - 1)
+
+    lip_velocity = np.diff(nl)
 
     return {
         "jitter_mean": np.mean(jitters) if jitters else 0.0,
@@ -144,6 +237,27 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
         "av_correlation": corr,
         "av_lag_frames": lag,
         "lip_variance": np.std(nl),
+        "lip_mean": float(np.mean(nl)),
+        "lip_std": float(np.std(nl)),
+        "lip_range": float(np.max(nl) - np.min(nl)),
+        "lip_velocity_mean": float(np.mean(lip_velocity)) if lip_velocity.size else 0.0,
+        "lip_velocity_std": float(np.std(lip_velocity)) if lip_velocity.size else 0.0,
+        "audio_rms_mean": float(np.mean(na)),
+        "audio_rms_std": float(np.std(na)),
+        "spectral_centroid_mean": float(np.mean(spectral_centroid)),
+        "spectral_centroid_std": float(np.std(spectral_centroid)),
+        "spectral_flux_mean": float(np.mean(onset_strength)),
+        "spectral_flux_std": float(np.std(onset_strength)),
+        "av_corr_05s_mean": corr_05_mean,
+        "av_corr_05s_std": corr_05_std,
+        "av_corr_10s_mean": corr_10_mean,
+        "av_corr_10s_std": corr_10_std,
+        "av_corr_20s_mean": corr_20_mean,
+        "av_corr_20s_std": corr_20_std,
+        "mouth_flow_mean": float(np.mean(mouth_flow_mags)) if mouth_flow_mags else 0.0,
+        "mouth_flow_std": float(np.std(mouth_flow_mags)) if mouth_flow_mags else 0.0,
+        "mouth_aspect_mean": float(np.mean(mouth_aspects)) if mouth_aspects else 0.0,
+        "mouth_aspect_std": float(np.std(mouth_aspects)) if mouth_aspects else 0.0,
         "det_count": len(lips),
     }
 
