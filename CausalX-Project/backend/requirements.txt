@@ -1,12 +1,11 @@
 numpy==1.26.4
-
-numpy==1.26.4
 pandas
 scipy
 opencv-python
 librosa
 soundfile
 audioread
+mediapipe==0.10.9
 mediapipe==0.10.9
 torch
 torchvision

@@ -106,6 +106,8 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
         audio_times = librosa.frames_to_time(
             np.arange(len(audio_rms)), sr=sr, hop_length=512
         )
+        spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
+        onset_strength = librosa.onset.onset_strength(y=y, sr=sr)
     except Exception:
         return None
 
@@ -146,6 +148,11 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
             aligned = align_landmarks_full(raw)
 
             lips.append(np.linalg.norm(aligned[LIP_TOP] - aligned[LIP_BOTTOM]))
+            if len(aligned) > max(MOUTH_LEFT, MOUTH_RIGHT):
+                mouth_width = np.linalg.norm(aligned[MOUTH_LEFT] - aligned[MOUTH_RIGHT])
+                mouth_aspects.append(
+                    float(lips[-1] / (mouth_width + 1e-6))
+                )
             times.append(frame_idx / fps)
 
             rigid = aligned[RIGID_ZONE]
@@ -186,6 +193,9 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
     # AV SYNC
     audio_sync = np.interp(times, audio_times, audio_rms)
     nl, na = normalize(np.array(lips)), normalize(audio_sync)
+    corr_05_mean, corr_05_std = windowed_corr_stats(nl, na, times, 0.5)
+    corr_10_mean, corr_10_std = windowed_corr_stats(nl, na, times, 1.0)
+    corr_20_mean, corr_20_std = windowed_corr_stats(nl, na, times, 2.0)
 
     corr, _ = pearsonr(nl, na)
     lag = np.argmax(
