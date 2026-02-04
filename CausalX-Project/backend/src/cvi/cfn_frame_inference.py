@@ -7,7 +7,7 @@ import librosa
 import warnings
 from src.cvi.face_bbox_highlighter import detect_face_bbox, mouth_bbox_from_landmarks
 from src.modules.causal_fusion import CausalFusionNetwork, CausalFusionNetworkV2
-from src.cvi.pipeline import FeatureExtractor
+from src.cvi.feature_extractor import FeatureExtractor
 from src.cvi.frame_causal_extractor import (
     extract_frame_level_features,
     compute_av_mismatch,

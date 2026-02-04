@@ -29,7 +29,7 @@ from src.utils.dataset_registry import (
     get_dfdc_videos,
     get_fakeavceleb_videos
 )
-from src.cvi.pipeline import FeatureExtractor
+from src.cvi.feature_extractor import FeatureExtractor
 
 # --- 2. OUTPUT PATH ---
 OUTPUT_CSV = os.path.join(
@@ -42,6 +42,7 @@ OUTPUT_CSV = os.path.join(
 # --- 3. CONSTANTS ---
 RIGID_ZONE = [1, 2, 4, 5, 6, 8, 9, 10, 151, 67, 103, 109, 332, 338, 297]
 LIP_TOP, LIP_BOTTOM = 13, 14
+MOUTH_LEFT, MOUTH_RIGHT = 78, 308
 MOUTH_LANDMARKS = [
     61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308,
     78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415,
@@ -106,6 +107,33 @@ def _safe_float(value, fallback=0.0):
         return fallback
 
 
+def windowed_corr_stats(lips, audio, times, window_s=1.0):
+    """
+    Compute mean/std of correlation between lips and audio in sliding windows.
+    """
+    if len(times) < 2:
+        return 0.0, 0.0
+
+    times = np.array(times)
+    corrs = []
+    for t in times:
+        mask = (times >= t) & (times <= t + window_s)
+        if mask.sum() < 2:
+            continue
+        l_seg = lips[mask]
+        a_seg = audio[mask]
+        if l_seg.std() == 0 or a_seg.std() == 0:
+            continue
+        corr, _ = pearsonr(l_seg, a_seg)
+        corrs.append(corr)
+
+    if not corrs:
+        return 0.0, 0.0
+
+    corrs = np.array(corrs)
+    return float(np.mean(corrs)), float(np.std(corrs))
+
+
 def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
     # AUDIO
     try:
@@ -124,6 +152,7 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
     fps = cap.get(cv2.CAP_PROP_FPS)
 
     jitters, lips, times = [], [], []
+    mouth_aspects = []
     mouth_flow_mags = []
     prev_mouth_gray = None
     prev_rigid = None

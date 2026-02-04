@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 from src.cvi.frame_causal_extractor import (
     extract_frame_level_features,
     compute_av_mismatch,
     get_video_meta,
 )
 from src.cvi.cfn_frame_inference import run_cfn_on_video
-import numpy as np
+from src.cvi.feature_extractor import FeatureExtractor  # kept for future embedding use
 
 
 def smooth_fake_probs(frames, window):
