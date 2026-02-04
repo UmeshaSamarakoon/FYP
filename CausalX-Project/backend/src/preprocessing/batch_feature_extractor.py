@@ -41,7 +41,6 @@ OUTPUT_CSV = os.path.join(
 # --- 3. CONSTANTS ---
 RIGID_ZONE = [1, 2, 4, 5, 6, 8, 9, 10, 151, 67, 103, 109, 332, 338, 297]
 LIP_TOP, LIP_BOTTOM = 13, 14
-MOUTH_LEFT, MOUTH_RIGHT = 61, 291
 MOUTH_LANDMARKS = [
     61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308,
     78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415,
@@ -97,32 +96,6 @@ def mouth_roi_from_landmarks(landmarks, frame_shape, padding=0.1):
 
     return x1, y1, x2, y2
 
-def windowed_corr_stats(sig_a, sig_b, times, window_s):
-    if len(sig_a) < 3:
-        return 0.0, 0.0
-    if window_s <= 0:
-        return 0.0, 0.0
-
-    time_arr = np.array(times)
-    corrs = []
-    start = time_arr.min()
-    end = time_arr.max()
-    t = start
-    while t < end:
-        mask = (time_arr >= t) & (time_arr < t + window_s)
-        if np.count_nonzero(mask) >= 3:
-            window_a = sig_a[mask]
-            window_b = sig_b[mask]
-            if np.std(window_a) > 1e-6 and np.std(window_b) > 1e-6:
-                corr, _ = pearsonr(window_a, window_b)
-                corrs.append(corr)
-        t += window_s
-
-    if not corrs:
-        return 0.0, 0.0
-
-    return float(np.mean(corrs)), float(np.std(corrs))
-
 # --- 5. FEATURE EXTRACTION ---
 
 def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
@@ -142,7 +115,7 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
 
-    jitters, lips, mouth_aspects, times = [], [], [], []
+    jitters, lips, times = [], [], []
     mouth_flow_mags = []
     prev_mouth_gray = None
     prev_rigid = None
@@ -244,20 +217,8 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
         "lip_velocity_std": float(np.std(lip_velocity)) if lip_velocity.size else 0.0,
         "audio_rms_mean": float(np.mean(na)),
         "audio_rms_std": float(np.std(na)),
-        "spectral_centroid_mean": float(np.mean(spectral_centroid)),
-        "spectral_centroid_std": float(np.std(spectral_centroid)),
-        "spectral_flux_mean": float(np.mean(onset_strength)),
-        "spectral_flux_std": float(np.std(onset_strength)),
-        "av_corr_05s_mean": corr_05_mean,
-        "av_corr_05s_std": corr_05_std,
-        "av_corr_10s_mean": corr_10_mean,
-        "av_corr_10s_std": corr_10_std,
-        "av_corr_20s_mean": corr_20_mean,
-        "av_corr_20s_std": corr_20_std,
         "mouth_flow_mean": float(np.mean(mouth_flow_mags)) if mouth_flow_mags else 0.0,
         "mouth_flow_std": float(np.std(mouth_flow_mags)) if mouth_flow_mags else 0.0,
-        "mouth_aspect_mean": float(np.mean(mouth_aspects)) if mouth_aspects else 0.0,
-        "mouth_aspect_std": float(np.std(mouth_aspects)) if mouth_aspects else 0.0,
         "det_count": len(lips),
     }
 
