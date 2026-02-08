@@ -122,11 +122,7 @@ export default function App() {
       <div className="min-h-screen bg-background p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
-            <Logo />
             <div className="flex items-center gap-4">
-              <div className="text-sm text-muted-foreground">
-                Breach segments: {breachCount}
-              </div>
               <Button
                 variant="outline"
                 onClick={handleReset}
@@ -134,6 +130,10 @@ export default function App() {
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Upload New Video
               </Button>
+              <Logo />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Breach segments: {breachCount}
             </div>
           </div>
           
