@@ -29,16 +29,20 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
   const [isMuted, setIsMuted] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [naturalSize, setNaturalSize] = useState({ width: 1, height: 1 });
+  const [videoError, setVideoError] = useState(false);
 
   useEffect(() => {
     const url = URL.createObjectURL(videoFile);
     setVideoUrl(url);
+    setVideoError(false);
     return () => URL.revokeObjectURL(url);
   }, [videoFile]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
+    video.load();
 
     const handleTimeUpdate = () => setCurrentTime(video.currentTime);
     const handleLoadedMetadata = () => {
@@ -65,7 +69,7 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
     };
-  }, []);
+  }, [videoUrl]);
 
   const togglePlay = () => {
     if (!videoRef.current) return;
@@ -191,11 +195,22 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
       {/* Video Player with Bounding Box */}
       <div className="relative bg-black rounded-lg overflow-hidden">
         <video
+          key={videoUrl}
           ref={videoRef}
           src={videoUrl}
           className="w-full aspect-video"
+          preload="metadata"
+          playsInline
           onClick={togglePlay}
+          onError={() => setVideoError(true)}
         />
+        {videoError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white text-center px-6">
+            <p>
+              Unable to render this video. Try re-uploading or use a different video format.
+            </p>
+          </div>
+        )}
         
         {/* Bounding Box Overlay - only for FAKE videos */}
         {showBoundingBox && bboxStyle && (
