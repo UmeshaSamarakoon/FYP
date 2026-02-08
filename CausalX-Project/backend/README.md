@@ -1,5 +1,21 @@
 # CausalX
 
+## Recommended retraining workflow (end-to-end)
+Use these scripts to retrain on your dataset, rebalance classes, and (optionally) train the embedding-aware model:
+
+```
+./scripts/run_training_pipeline.sh
+```
+
+Embedding-aware training:
+
+```
+./scripts/run_embedding_training.sh
+```
+
+Threshold tuning (short-term fix only) is controlled by environment variables. Copy
+`backend/.env.example` and override `CFN_PROB_THRESH` / `CFN_RATIO_THRESH` as needed.
+
 ## Retraining the CFN model (recommended for higher accuracy)
 
 The inference pipeline uses a pretrained model from `backend/models/cfn.pth`. For better accuracy on your dataset, retrain using the feature CSV produced by the preprocessing scripts.
