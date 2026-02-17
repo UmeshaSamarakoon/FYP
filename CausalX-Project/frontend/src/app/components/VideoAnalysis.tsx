@@ -30,11 +30,13 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [naturalSize, setNaturalSize] = useState({ width: 1, height: 1 });
   const [videoError, setVideoError] = useState(false);
+  const [isVideoReady, setIsVideoReady] = useState(false);
 
   useEffect(() => {
     const url = URL.createObjectURL(videoFile);
     setVideoUrl(url);
     setVideoError(false);
+    setIsVideoReady(false);
     return () => URL.revokeObjectURL(url);
   }, [videoFile]);
 
@@ -51,6 +53,19 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
         width: video.videoWidth || 1,
         height: video.videoHeight || 1,
       });
+      setVideoError(false);
+    };
+    const handleLoadedData = () => {
+      setIsVideoReady(true);
+      setVideoError(false);
+    };
+    const handleCanPlay = () => {
+      setIsVideoReady(true);
+      setVideoError(false);
+    };
+    const handlePlaying = () => {
+      setIsVideoReady(true);
+      setVideoError(false);
     };
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
@@ -58,6 +73,9 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
 
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('loadeddata', handleLoadedData);
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('playing', handlePlaying);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
     video.addEventListener('ended', handleEnded);
@@ -65,11 +83,24 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('loadeddata', handleLoadedData);
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('playing', handlePlaying);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
     };
   }, [videoUrl]);
+
+  useEffect(() => {
+    if (!videoUrl) return;
+    const timer = window.setTimeout(() => {
+      if (!isVideoReady && !videoError) {
+        setVideoError(true);
+      }
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [videoUrl, isVideoReady, videoError]);
 
   const togglePlay = () => {
     if (!videoRef.current) return;
@@ -197,18 +228,33 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
         <video
           key={videoUrl}
           ref={videoRef}
-          src={videoUrl}
-          className="w-full aspect-video"
+          className="w-full aspect-video bg-black"
           preload="metadata"
           playsInline
+          controls
           onClick={togglePlay}
-          onError={() => setVideoError(true)}
-        />
+          onError={() => {
+            setVideoError(true);
+            setIsVideoReady(false);
+          }}
+        >
+          <source src={videoUrl} type={videoFile.type || 'video/mp4'} />
+        </video>
+        {!videoError && !isVideoReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-sm">
+            Loading video preview...
+          </div>
+        )}
         {videoError && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white text-center px-6">
-            <p>
-              Unable to render this video. Try re-uploading or use a different video format.
-            </p>
+            <div className="space-y-2">
+              <p>
+                Unable to render this video preview. Your browser may not support this codec.
+              </p>
+              <p className="text-xs text-white/70">
+                Try another MP4 (H.264/AAC) or use the native controls to test playback.
+              </p>
+            </div>
           </div>
         )}
         
