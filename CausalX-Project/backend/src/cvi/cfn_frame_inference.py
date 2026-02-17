@@ -132,8 +132,8 @@ def run_cfn_on_video(
             ], dtype=np.float32)
 
             if _scaler is not None:
-                av_features = _scaler["av"].transform([av_features])[0]
-                phys_features = _scaler["phys"].transform([phys_features])[0]
+                av_features = _scaler["av"].transform([av_features])[0].astype(np.float32, copy=False)
+                phys_features = _scaler["phys"].transform([phys_features])[0].astype(np.float32, copy=False)
 
             X_av = torch.tensor(av_features).unsqueeze(0).to(DEVICE)
             X_phys = torch.tensor(phys_features).unsqueeze(0).to(DEVICE)

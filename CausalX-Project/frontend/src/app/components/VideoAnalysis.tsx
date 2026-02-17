@@ -28,7 +28,7 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string>('');
-  const [naturalSize, setNaturalSize] = useState({ width: 1, height: 1 });
+  const [naturalSize, setNaturalSize] = useState({ width: 16, height: 9 });
   const [videoError, setVideoError] = useState(false);
   const [isVideoReady, setIsVideoReady] = useState(false);
 
@@ -59,14 +59,6 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
       setIsVideoReady(true);
       setVideoError(false);
     };
-    const handleCanPlay = () => {
-      setIsVideoReady(true);
-      setVideoError(false);
-    };
-    const handlePlaying = () => {
-      setIsVideoReady(true);
-      setVideoError(false);
-    };
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
     const handleEnded = () => setIsPlaying(false);
@@ -74,8 +66,6 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('loadeddata', handleLoadedData);
-    video.addEventListener('canplay', handleCanPlay);
-    video.addEventListener('playing', handlePlaying);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
     video.addEventListener('ended', handleEnded);
@@ -84,8 +74,6 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('loadeddata', handleLoadedData);
-      video.removeEventListener('canplay', handleCanPlay);
-      video.removeEventListener('playing', handlePlaying);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
@@ -229,7 +217,7 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
           key={videoUrl}
           ref={videoRef}
           className="w-full aspect-video bg-black"
-          preload="metadata"
+          preload="auto"
           playsInline
           controls
           onClick={togglePlay}
