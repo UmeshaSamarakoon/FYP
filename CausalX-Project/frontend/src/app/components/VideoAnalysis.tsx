@@ -28,7 +28,7 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string>('');
-  const [naturalSize, setNaturalSize] = useState({ width: 1, height: 1 });
+  const [naturalSize, setNaturalSize] = useState({ width: 16, height: 9 });
   const [videoError, setVideoError] = useState(false);
   const [isVideoReady, setIsVideoReady] = useState(false);
 
@@ -207,7 +207,7 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
           key={videoUrl}
           ref={videoRef}
           className="w-full aspect-video bg-black"
-          preload="metadata"
+          preload="auto"
           playsInline
           controls
           onClick={togglePlay}
