@@ -30,11 +30,13 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [naturalSize, setNaturalSize] = useState({ width: 1, height: 1 });
   const [videoError, setVideoError] = useState(false);
+  const [isVideoReady, setIsVideoReady] = useState(false);
 
   useEffect(() => {
     const url = URL.createObjectURL(videoFile);
     setVideoUrl(url);
     setVideoError(false);
+    setIsVideoReady(false);
     return () => URL.revokeObjectURL(url);
   }, [videoFile]);
 
@@ -51,6 +53,11 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
         width: video.videoWidth || 1,
         height: video.videoHeight || 1,
       });
+      setVideoError(false);
+    };
+    const handleLoadedData = () => {
+      setIsVideoReady(true);
+      setVideoError(false);
     };
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
@@ -58,6 +65,7 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
 
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('loadeddata', handleLoadedData);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
     video.addEventListener('ended', handleEnded);
@@ -65,6 +73,7 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('loadeddata', handleLoadedData);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
@@ -197,13 +206,23 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
         <video
           key={videoUrl}
           ref={videoRef}
-          src={videoUrl}
-          className="w-full aspect-video"
+          className="w-full aspect-video bg-black"
           preload="metadata"
           playsInline
+          controls
           onClick={togglePlay}
-          onError={() => setVideoError(true)}
-        />
+          onError={() => {
+            setVideoError(true);
+            setIsVideoReady(false);
+          }}
+        >
+          <source src={videoUrl} type={videoFile.type || 'video/mp4'} />
+        </video>
+        {!videoError && !isVideoReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-sm">
+            Loading video preview...
+          </div>
+        )}
         {videoError && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white text-center px-6">
             <p>
