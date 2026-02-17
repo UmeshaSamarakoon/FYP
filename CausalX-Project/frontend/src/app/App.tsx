@@ -30,20 +30,22 @@ function buildSegments(frames: FrameResult[], threshold = PROB_THRESHOLD, maxGap
 
   for (const f of suspicious) {
     if (!current) {
-      current = { start: f.timestamp, end: f.timestamp, score: f.fake_prob };
-      currentScore = f.fake_prob;
+      const breachScore = f.av_mismatch ?? f.fake_prob;
+      current = { start: f.timestamp, end: f.timestamp, score: breachScore };
+      currentScore = breachScore;
       continue;
     }
 
     const gap = f.timestamp - current.end;
     if (gap <= maxGap) {
       current.end = f.timestamp;
-      currentScore = Math.max(currentScore, f.fake_prob);
+      currentScore = Math.max(currentScore, f.av_mismatch ?? f.fake_prob);
       current.score = currentScore;
     } else {
       segments.push(current);
-      current = { start: f.timestamp, end: f.timestamp, score: f.fake_prob };
-      currentScore = f.fake_prob;
+      const breachScore = f.av_mismatch ?? f.fake_prob;
+      current = { start: f.timestamp, end: f.timestamp, score: breachScore };
+      currentScore = breachScore;
     }
   }
 
