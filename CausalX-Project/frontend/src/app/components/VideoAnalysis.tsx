@@ -80,6 +80,16 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
     };
   }, [videoUrl]);
 
+  useEffect(() => {
+    if (!videoUrl) return;
+    const timer = window.setTimeout(() => {
+      if (!isVideoReady && !videoError) {
+        setVideoError(true);
+      }
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [videoUrl, isVideoReady, videoError]);
+
   const togglePlay = () => {
     if (!videoRef.current) return;
     if (isPlaying) {
@@ -225,9 +235,14 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
         )}
         {videoError && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white text-center px-6">
-            <p>
-              Unable to render this video. Try re-uploading or use a different video format.
-            </p>
+            <div className="space-y-2">
+              <p>
+                Unable to render this video preview. Your browser may not support this codec.
+              </p>
+              <p className="text-xs text-white/70">
+                Try another MP4 (H.264/AAC) or use the native controls to test playback.
+              </p>
+            </div>
           </div>
         )}
         
