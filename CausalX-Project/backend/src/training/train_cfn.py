@@ -139,6 +139,12 @@ def main():
         action="store_true",
         help="Include TCN/Wav2Vec2 embedding columns and train CFN V2.",
     )
+    parser.add_argument(
+        "--scheduler",
+        choices=["plateau", "cosine"],
+        default="cosine",
+        help="Learning rate scheduler to use (default: cosine).",
+    )
     args = parser.parse_args()
 
     set_seed(SEED)
@@ -219,7 +225,10 @@ def main():
         criterion = torch.nn.BCELoss()
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.5, patience=2)
+    if args.scheduler == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr * 0.05)
+    else:
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.5, patience=2)
 
     best_auc = -1.0
     epochs_no_improve = 0
@@ -232,7 +241,10 @@ def main():
         train_loss = train_epoch(model, train_loader, criterion, optimizer, device, use_weights=use_weights)
         val_loss, val_acc, val_auc, val_labels, val_probs = eval_epoch(model, val_loader, criterion, device)
         sweep = threshold_sweep(val_labels, val_probs)
-        scheduler.step(val_auc)
+        if args.scheduler == "cosine":
+            scheduler.step()
+        else:
+            scheduler.step(val_auc)
 
         print(
             f"Epoch {epoch + 1:02d} | "

@@ -10,6 +10,7 @@ from src.cvi.frame_causal_extractor import (
 )
 from src.cvi.cfn_frame_inference import run_cfn_on_video
 from src.cvi.feature_extractor import FeatureExtractor  # kept for future embedding use
+from src.cvi.scm import run_scm
 
 
 def smooth_fake_probs(frames, window):
@@ -132,6 +133,8 @@ class CausalInferenceEngine:
     chunk_seconds: int
     causal_thresh: float
     max_seconds: float | None
+    enable_scm: bool = False
+    scm_z_thresh: float = 2.0
 
     def run(self, video_path: str):
         frame_results = run_cfn_on_video(
@@ -144,7 +147,15 @@ class CausalInferenceEngine:
 
         frame_results, prob_key = smooth_fake_probs(frame_results, self.smooth_window)
         frame_results = add_causal_breaks(frame_results, causal_thresh=self.causal_thresh)
-        causal_segments = build_segments(frame_results, flag_key="causal_break")
+
+        flag_key = "causal_break"
+        if self.enable_scm:
+            frame_results = run_scm(frame_results, z_threshold=self.scm_z_thresh)
+            for f in frame_results:
+                f["causal_or_scm"] = f.get("causal_break") or f.get("scm_violation", False)
+            flag_key = "causal_or_scm"
+
+        causal_segments = build_segments(frame_results, flag_key=flag_key)
 
         video_fake, confidence, highlight_times = summarize_video(
             frame_results,
@@ -162,6 +173,7 @@ class CausalInferenceEngine:
             "highlight_timestamps": highlight_times,
             "causal_segments": causal_segments,
             "frames": frame_results,
+            "scm_enabled": self.enable_scm,
         }
 
 

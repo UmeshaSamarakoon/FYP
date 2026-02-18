@@ -1,0 +1,6 @@
+technique,literature,signal,status,used_in_prototype
+SyncNet-style AV embedding distance,Chung & Zisserman 2016,Cosine distance between lip and audio embeddings,evaluated,False
+Wav2Lip sync confidence,Prajwal et al. 2020,Sync discriminator confidence over AV alignment,evaluated,False
+AV-HuBERT style AV alignment,Shi et al. 2022,Self-supervised AV representation mismatch score,evaluated,False
+LipForensics-style mouth ROI artifacts,Haliassos et al. 2022,Mouth-region spatial artifact classifier,evaluated,False
+CFN AV mismatch + smoothing + ratio threshold,"Causal fusion (ours), aligned to AV mismatch literature",CFN fake_prob with temporal smoothing and ratio aggregation,selected,True
