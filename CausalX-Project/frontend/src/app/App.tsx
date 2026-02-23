@@ -13,45 +13,52 @@ type BreachSegment = { start: number; end: number; score: number };
 interface AnalysisResult {
   result: 'REAL' | 'FAKE';
   confidence: number;
+  causalBreachScore?: number;
   breachSegments: BreachSegment[];
   frames: FrameResult[];
 }
 
 const PROB_THRESHOLD = 0.6;
 
-function buildSegments(frames: FrameResult[], threshold = PROB_THRESHOLD, maxGap = 0.5): BreachSegment[] {
+function buildSegments(
+  frames: FrameResult[],
+  apiSegments?: { start: number; end: number; score?: number }[],
+  threshold = PROB_THRESHOLD,
+  maxGap = 0.5,
+): BreachSegment[] {
+  if (apiSegments?.length) {
+    return apiSegments.map((segment) => ({
+      start: segment.start,
+      end: segment.end,
+      score: segment.score ?? 0,
+    }));
+  }
+
   const suspicious = frames
     .filter((f) => (f.fake_prob ?? 0) >= threshold)
     .sort((a, b) => a.timestamp - b.timestamp);
 
   const segments: BreachSegment[] = [];
   let current: BreachSegment | null = null;
-  let currentScore = 0;
+  const frameBreachScore = (f: FrameResult) => f.causal_breach_score ?? f.av_mismatch ?? f.fake_prob;
 
   for (const f of suspicious) {
     if (!current) {
-      const breachScore = f.av_mismatch ?? f.fake_prob;
-      current = { start: f.timestamp, end: f.timestamp, score: breachScore };
-      currentScore = breachScore;
+      current = { start: f.timestamp, end: f.timestamp, score: frameBreachScore(f) };
       continue;
     }
 
     const gap = f.timestamp - current.end;
     if (gap <= maxGap) {
       current.end = f.timestamp;
-      currentScore = Math.max(currentScore, f.av_mismatch ?? f.fake_prob);
-      current.score = currentScore;
+      current.score = Math.max(current.score, frameBreachScore(f));
     } else {
       segments.push(current);
-      const breachScore = f.av_mismatch ?? f.fake_prob;
-      current = { start: f.timestamp, end: f.timestamp, score: breachScore };
-      currentScore = breachScore;
+      current = { start: f.timestamp, end: f.timestamp, score: frameBreachScore(f) };
     }
   }
 
-  if (current) {
-    segments.push(current);
-  }
+  if (current) segments.push(current);
 
   return segments;
 }
@@ -74,12 +81,13 @@ export default function App() {
         : res.video_fake ? "FAKE" : "REAL";
 
       const frames = res.frames ?? [];
-      const segments = buildSegments(frames);
+      const segments = buildSegments(frames, res.causal_segments);
 
       setUploadedFile(file);
       setAnalysisResult({
         result: label === "FAKE" ? "FAKE" : "REAL",
         confidence: (res.fake_confidence ?? 0) * 100,
+        causalBreachScore: res.causal_breach_score,
         breachSegments: segments,
         frames,
       });
@@ -146,6 +154,7 @@ export default function App() {
               confidence={analysisResult.confidence}
               breachSegments={analysisResult.breachSegments}
               frames={analysisResult.frames}
+              causalBreachScore={analysisResult.causalBreachScore}
               probThreshold={PROB_THRESHOLD}
             />
           </div>

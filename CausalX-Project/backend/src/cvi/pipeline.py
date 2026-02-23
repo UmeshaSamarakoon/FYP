@@ -63,7 +63,38 @@ def add_causal_breaks(frames, causal_thresh=0.6):
     return frames
 
 
-def build_segments(frames, flag_key="causal_break"):
+def _clip01(value):
+    return float(np.clip(value, 0.0, 1.0))
+
+
+def add_causal_breach_scores(frames, use_scm=False):
+    """
+    Compute a bounded [0,1] causal breach score per frame.
+
+    Score blends:
+      - AV mismatch strength (primary evidence)
+      - CFN fake probability (model confidence)
+      - SCM z-score contribution (optional, when enabled)
+    """
+    if not frames:
+        return frames
+
+    for f in frames:
+        av_component = _clip01(f.get("av_mismatch", 0.0))
+        prob_component = _clip01(f.get("fake_prob_smooth", f.get("fake_prob", 0.0)))
+
+        if use_scm:
+            scm_component = _clip01(f.get("scm_z", 0.0) / 3.0)
+            score = 0.5 * av_component + 0.3 * prob_component + 0.2 * scm_component
+        else:
+            score = 0.65 * av_component + 0.35 * prob_component
+
+        f["causal_breach_score"] = _clip01(score)
+
+    return frames
+
+
+def build_segments(frames, flag_key="causal_break", score_key="causal_breach_score"):
     """
     Build contiguous time segments from frame-level flags.
     """
@@ -74,7 +105,8 @@ def build_segments(frames, flag_key="causal_break"):
     timestamps = sorted(f["timestamp"] for f in flagged)
     if len(timestamps) == 1:
         t = timestamps[0]
-        return [[t, t]]
+        only_score = float(flagged[0].get(score_key, 0.0))
+        return [{"start": t, "end": t, "score": only_score}]
 
     diffs = np.diff(timestamps)
     step = float(np.median(diffs)) if len(diffs) else 0.05
@@ -83,14 +115,21 @@ def build_segments(frames, flag_key="causal_break"):
     segments = []
     start = timestamps[0]
     prev = timestamps[0]
+    segment_scores = [float(f.get(score_key, 0.0)) for f in flagged if f["timestamp"] == start]
 
     for t in timestamps[1:]:
+        frame_scores = [float(f.get(score_key, 0.0)) for f in flagged if f["timestamp"] == t]
         if t - prev > max_gap:
-            segments.append([start, prev])
+            mean_score = float(np.mean(segment_scores)) if segment_scores else 0.0
+            segments.append({"start": start, "end": prev, "score": mean_score})
             start = t
+            segment_scores = frame_scores
+        else:
+            segment_scores.extend(frame_scores)
         prev = t
 
-    segments.append([start, prev])
+    mean_score = float(np.mean(segment_scores)) if segment_scores else 0.0
+    segments.append({"start": start, "end": prev, "score": mean_score})
     return segments
 
 
@@ -155,6 +194,8 @@ class CausalInferenceEngine:
                 f["causal_or_scm"] = f.get("causal_break") or f.get("scm_violation", False)
             flag_key = "causal_or_scm"
 
+        frame_results = add_causal_breach_scores(frame_results, use_scm=self.enable_scm)
+
         causal_segments = build_segments(frame_results, flag_key=flag_key)
 
         video_fake, confidence, highlight_times = summarize_video(
@@ -165,6 +206,7 @@ class CausalInferenceEngine:
         )
 
         overall_score = overall_video_score(frame_results, prob_key=prob_key)
+        causal_breach_score = overall_video_score(frame_results, prob_key="causal_breach_score")
 
         return {
             "video_fake": video_fake,
@@ -172,6 +214,7 @@ class CausalInferenceEngine:
             "overall_score": overall_score,
             "highlight_timestamps": highlight_times,
             "causal_segments": causal_segments,
+            "causal_breach_score": causal_breach_score,
             "frames": frame_results,
             "scm_enabled": self.enable_scm,
         }

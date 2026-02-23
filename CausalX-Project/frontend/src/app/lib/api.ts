@@ -6,14 +6,22 @@ const API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replac
 export type FrameResult = {
   timestamp: number;
   fake_prob: number;
+  fake_prob_smooth?: number;
   av_mismatch?: number;
+  causal_breach_score?: number;
+  scm_violation?: boolean;
+  scm_z?: number;
   bbox?: [number, number, number, number] | null;
 };
 
 export type AnalyzeResponse = {
   video_fake: string | number;
   fake_confidence?: number;
+  overall_score?: number;
+  causal_breach_score?: number;
+  scm_enabled?: boolean;
   highlight_timestamps?: number[];
+  causal_segments?: { start: number; end: number; score?: number }[];
   frames: FrameResult[];
 };
 
