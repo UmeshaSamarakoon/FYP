@@ -16,10 +16,11 @@ interface VideoAnalysisProps {
   confidence: number;
   breachSegments: CausalBreachSegment[];
   frames: FrameResult[];
+  causalBreachScore?: number;
   probThreshold?: number;
 }
 
-export function VideoAnalysis({ videoFile, result, confidence, breachSegments, frames, probThreshold = 0.6 }: VideoAnalysisProps) {
+export function VideoAnalysis({ videoFile, result, confidence, breachSegments, frames, causalBreachScore, probThreshold = 0.6 }: VideoAnalysisProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -207,6 +208,11 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
           <span className="text-lg text-muted-foreground">
             Confidence: {confidence.toFixed(1)}%
           </span>
+          {typeof causalBreachScore === 'number' && (
+            <span className="text-lg text-muted-foreground">
+              Causal Breach Score: {(causalBreachScore * 100).toFixed(1)}%
+            </span>
+          )}
         </div>
         <p className="text-muted-foreground">{videoFile.name}</p>
       </div>
