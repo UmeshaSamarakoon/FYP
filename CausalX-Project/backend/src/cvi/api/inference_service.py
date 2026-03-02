@@ -9,15 +9,17 @@ from src.cvi.pipeline import (
     overall_video_score,
 )
 
-PROB_THRESH = float(os.getenv("CFN_PROB_THRESH", "0.6"))
-RATIO_THRESH = float(os.getenv("CFN_RATIO_THRESH", "0.3"))
+PROB_THRESH = float(os.getenv("CFN_PROB_THRESH", "0.80"))
+RATIO_THRESH = float(os.getenv("CFN_RATIO_THRESH", "0.60"))
 SMOOTH_WINDOW = int(os.getenv("CFN_SMOOTH_WINDOW", "5"))
 CHUNK_SECONDS = int(os.getenv("CFN_CHUNK_SECONDS", "10"))
-CAUSAL_THRESH = float(os.getenv("CFN_CAUSAL_THRESH", "0.6"))
+CAUSAL_THRESH = float(os.getenv("CFN_CAUSAL_THRESH", "0.75"))
 ENABLE_SCM_CHECKS = os.getenv("CFN_ENABLE_SCM_CHECKS", "false").lower() == "true"
 SCM_Z_THRESH = float(os.getenv("CFN_SCM_Z_THRESH", "2.0"))
 MAX_SECONDS_ENV = os.getenv("CFN_MAX_SECONDS")
 MAX_SECONDS = float(MAX_SECONDS_ENV) if MAX_SECONDS_ENV else None
+# Default to OR rule because latest full-manifest sweep picked it as best.
+REQUIRE_FLAG = os.getenv("CFN_REQUIRE_FLAG", "false").lower() == "true"
 
 def build_inference_controller() -> InferenceController:
     engine = CausalInferenceEngine(
@@ -29,6 +31,7 @@ def build_inference_controller() -> InferenceController:
         max_seconds=MAX_SECONDS,
         enable_scm=ENABLE_SCM_CHECKS,
         scm_z_thresh=SCM_Z_THRESH,
+        require_flag=REQUIRE_FLAG,
     )
     return InferenceController(engine=engine)
 

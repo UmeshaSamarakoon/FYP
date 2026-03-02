@@ -1,3 +1,8 @@
+import os
+
+# Force MediaPipe to run on CPU to avoid OpenGL context issues in headless/Metal
+os.environ.setdefault("MEDIAPIPE_DISABLE_GPU", "1")
+
 import cv2
 import numpy as np
 import librosa
@@ -30,6 +35,8 @@ FACE_MESH = mp_face_mesh.FaceMesh(
 
 LIP_TOP, LIP_BOTTOM = 13, 14
 LIP_IDX = list(range(0, 468))
+# Use rigid landmarks to approximate head motion between frames
+RIGID_ZONE = [1, 2, 4, 5, 6, 8, 9, 10, 151, 67, 103, 109, 332, 338, 297]
 
 
 def get_video_meta(video_path):
@@ -95,6 +102,8 @@ def extract_frame_level_features(
     ) + start_time
 
     frames = []
+    prev_rigid = None
+    jitter_history = []
     # start frame index aligns timestamps to absolute video time
     frame_idx = int(start_time * fps)
     end_time = start_time + duration if duration is not None else None
@@ -122,12 +131,26 @@ def extract_frame_level_features(
             # audio at same timestamp
             audio_val = np.interp(t, audio_times, audio_rms)
 
+            # Approximate head jitter: mean rigid-point displacement vs previous frame
+            jitter = 0.0
+            if prev_rigid is not None:
+                rigid = pts[RIGID_ZONE]
+                jitter = float(np.mean(np.linalg.norm(rigid - prev_rigid, axis=1)))
+                prev_rigid = rigid
+            else:
+                prev_rigid = pts[RIGID_ZONE]
+
+            jitter_history.append(jitter)
+            jitter_std = float(np.std(jitter_history[-5:])) if len(jitter_history) >= 2 else 0.0
+
             frames.append({
                 "timestamp": t,
                 "lip_aperture": lip_aperture,
                 "audio_rms": audio_val,
                 "landmarks": pts,
-                "frame": frame
+                "frame": frame,
+                "jitter": jitter,
+                "jitter_std": jitter_std,
             })
 
         frame_idx += 1

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import shutil
 import os
 import uuid
+from pathlib import Path
 
 from src.cvi.api.inference_service import run_full_cvi_pipeline
 from src.cvi.api.background_worker import BackgroundWorker
@@ -22,6 +23,17 @@ app.add_middleware(
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+
+def _safe_upload_path(filename: str) -> str:
+    """
+    Collapse user-supplied names to a safe, unique path inside UPLOAD_DIR.
+    Avoids path traversal and collisions by stripping directories and
+    prefixing with a UUID.
+    """
+    name = Path(filename).name  # drop any path components
+    unique = f"{uuid.uuid4()}_{name}"
+    return os.path.join(UPLOAD_DIR, unique)
+
 @app.on_event("startup")
 def startup_worker():
     worker.start()
@@ -36,35 +48,40 @@ def shutdown_worker():
 async def analyze_video(file: UploadFile = File(...)):
     analysis_id = str(uuid.uuid4())
     log_event(analysis_id, "upload_received", {"filename": file.filename})
-    video_path = os.path.join(UPLOAD_DIR, file.filename)
+    video_path = _safe_upload_path(file.filename)
 
-    with open(video_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
-    log_event(analysis_id, "processing_started")
-    pipeline_output = run_full_cvi_pipeline(video_path)
-    frame_results = pipeline_output["frames"]
+    try:
+        with open(video_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-    label = "FAKE" if pipeline_output.get("video_fake") else "REAL"
+        log_event(analysis_id, "processing_started")
+        pipeline_output = run_full_cvi_pipeline(video_path)
+        frame_results = pipeline_output["frames"]
 
-    response = {
-        "analysis_id": analysis_id,
-        "video_name": file.filename,
-        "video_fake": label,
-        "fake_confidence": pipeline_output.get("fake_confidence"),
-        "overall_score": pipeline_output.get("overall_score"),
-        "highlight_timestamps": pipeline_output.get("highlight_timestamps", []),
-        "causal_segments": pipeline_output.get("causal_segments", []),
-        "frames": frame_results
-    }
-    save_result(analysis_id=analysis_id, video_name=file.filename, payload=response)
-    log_event(analysis_id, "processing_completed")
-    return response
+        label = "FAKE" if pipeline_output.get("video_fake") else "REAL"
+
+        response = {
+            "analysis_id": analysis_id,
+            "video_name": file.filename,
+            "video_fake": label,
+            "fake_confidence": pipeline_output.get("fake_confidence"),
+            "overall_score": pipeline_output.get("overall_score"),
+            "highlight_timestamps": pipeline_output.get("highlight_timestamps", []),
+            "causal_segments": pipeline_output.get("causal_segments", []),
+            "frames": frame_results
+        }
+        save_result(analysis_id=analysis_id, video_name=file.filename, payload=response)
+        log_event(analysis_id, "processing_completed")
+        return response
+    finally:
+        # Prevent disk accumulation for sync endpoint
+        if os.path.exists(video_path):
+            os.remove(video_path)
 
 
 @app.post("/analyze/async")
 async def analyze_video_async(file: UploadFile = File(...)):
-    video_path = os.path.join(UPLOAD_DIR, file.filename)
+    video_path = _safe_upload_path(file.filename)
 
     with open(video_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)

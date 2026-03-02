@@ -34,7 +34,32 @@ def build_loaders(X_av, X_phys, y, weights, batch_size, shuffle=True):
     return loader
 
 
-def train_epoch(model, loader, criterion, optimizer, device, use_weights=False):
+def focal_loss_probs(preds, labels, alpha=0.75, gamma=2.0, eps=1e-7):
+    preds = torch.clamp(preds, eps, 1.0 - eps)
+    pt = torch.where(labels == 1, preds, 1.0 - preds)
+    alpha_t = torch.where(labels == 1, torch.full_like(labels, alpha), torch.full_like(labels, 1.0 - alpha))
+    return -alpha_t * ((1.0 - pt) ** gamma) * torch.log(pt)
+
+
+def _compute_cls_loss(preds, label, criterion, loss_type="bce", focal_alpha=0.75, focal_gamma=2.0):
+    if loss_type == "focal":
+        return focal_loss_probs(preds, label, alpha=focal_alpha, gamma=focal_gamma)
+    return criterion(preds, label)
+
+
+def train_epoch(
+    model,
+    loader,
+    criterion,
+    optimizer,
+    device,
+    use_weights=False,
+    use_causal=False,
+    causal_weight=0.0,
+    loss_type="bce",
+    focal_alpha=0.75,
+    focal_gamma=2.0,
+):
     model.train()
     total_loss = 0.0
     for batch in loader:
@@ -48,19 +73,61 @@ def train_epoch(model, loader, criterion, optimizer, device, use_weights=False):
         label = label.to(device)
 
         optimizer.zero_grad()
-        preds = model(av, phys)
-        if use_weights:
-            raw_loss = criterion(preds, label)
-            loss = (raw_loss * weight).mean()
+        if use_causal:
+            probs, av_h, phys_h = model.branch_outputs(av, phys)
+            cls_loss = _compute_cls_loss(
+                probs,
+                label,
+                criterion,
+                loss_type=loss_type,
+                focal_alpha=focal_alpha,
+                focal_gamma=focal_gamma,
+            )
+            if use_weights:
+                cls_loss = (cls_loss * weight).mean()
+            elif cls_loss.dim() > 0:
+                cls_loss = cls_loss.mean()
+            causal_loss = model.causal_penalty(av_h, phys_h)
+            loss = cls_loss + causal_weight * causal_loss
         else:
-            loss = criterion(preds, label)
+            probs = model(av, phys)
+            if use_weights:
+                raw_loss = _compute_cls_loss(
+                    probs,
+                    label,
+                    criterion,
+                    loss_type=loss_type,
+                    focal_alpha=focal_alpha,
+                    focal_gamma=focal_gamma,
+                )
+                loss = (raw_loss * weight).mean()
+            else:
+                loss = _compute_cls_loss(
+                    probs,
+                    label,
+                    criterion,
+                    loss_type=loss_type,
+                    focal_alpha=focal_alpha,
+                    focal_gamma=focal_gamma,
+                )
+                if loss.dim() > 0:
+                    loss = loss.mean()
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
     return total_loss / max(len(loader), 1)
 
 
-def eval_epoch(model, loader, criterion, device):
+def eval_epoch(
+    model,
+    loader,
+    criterion,
+    device,
+    use_causal=False,
+    loss_type="bce",
+    focal_alpha=0.75,
+    focal_gamma=2.0,
+):
     model.eval()
     total_loss = 0.0
     all_preds = []
@@ -70,8 +137,18 @@ def eval_epoch(model, loader, criterion, device):
             av = av.to(device)
             phys = phys.to(device)
             label = label.to(device)
-            preds = model(av, phys)
-            loss = criterion(preds, label)
+            if use_causal:
+                preds, _, _ = model.branch_outputs(av, phys)
+            else:
+                preds = model(av, phys)
+            loss = _compute_cls_loss(
+                preds,
+                label,
+                criterion,
+                loss_type=loss_type,
+                focal_alpha=focal_alpha,
+                focal_gamma=focal_gamma,
+            )
             if loss.dim() > 0:
                 loss = loss.mean()
             total_loss += loss.item()
@@ -117,6 +194,37 @@ def threshold_sweep(labels, probs):
     return {"pr_auc": pr_auc, "best_f1": best_f1, "best_thr": best_thr}
 
 
+def filter_training_sources(df, train_source):
+    """
+    Keep only requested data source(s) for training.
+    """
+    source = (train_source or "all").strip().lower()
+    if source == "all":
+        return df
+
+    if source != "fakeavceleb":
+        raise ValueError(f"Unsupported --train-source value: {train_source}")
+
+    if "dataset" in df.columns:
+        mask = df["dataset"].astype(str).str.lower().eq("fakeavceleb")
+        return df.loc[mask].copy()
+
+    if "path" in df.columns:
+        mask = df["path"].astype(str).str.lower().str.contains("fakeavceleb", regex=False)
+        return df.loc[mask].copy()
+
+    if "video_id" in df.columns:
+        # Conservative fallback: keep rows whose video_id explicitly mentions fakeavceleb.
+        mask = df["video_id"].astype(str).str.lower().str.contains("fakeavceleb", regex=False)
+        filtered = df.loc[mask].copy()
+        if not filtered.empty:
+            return filtered
+
+    raise RuntimeError(
+        "Could not isolate FakeAVCeleb rows: missing 'dataset' or 'path' hints in input CSV."
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Train Causal Fusion Network (CFN).")
     parser.add_argument(
@@ -140,16 +248,41 @@ def main():
         help="Include TCN/Wav2Vec2 embedding columns and train CFN V2.",
     )
     parser.add_argument(
+        "--causal-weight",
+        type=float,
+        default=0.0,
+        help="Weight for SCM-inspired consistency penalty (0 to disable).",
+    )
+    parser.add_argument(
         "--scheduler",
         choices=["plateau", "cosine"],
         default="cosine",
         help="Learning rate scheduler to use (default: cosine).",
+    )
+    parser.add_argument("--loss", choices=["bce", "focal"], default="bce")
+    parser.add_argument("--focal-alpha", type=float, default=0.75)
+    parser.add_argument("--focal-gamma", type=float, default=2.0)
+    parser.add_argument(
+        "--train-source",
+        choices=["fakeavceleb", "all"],
+        default="fakeavceleb",
+        help="Training source filter. Default keeps only FakeAVCeleb rows.",
     )
     args = parser.parse_args()
 
     set_seed(SEED)
 
     df = pd.read_csv(args.data)
+    before_rows = len(df)
+    df = filter_training_sources(df, args.train_source)
+    after_rows = len(df)
+    if after_rows == 0:
+        raise RuntimeError("No rows available after source filtering.")
+    print(
+        f"Loaded {before_rows} rows from {args.data}; "
+        f"using {after_rows} rows after --train-source={args.train_source} filter."
+    )
+
     av_feature_cols = ["lip_variance", "av_correlation", "av_lag_frames"]
     if args.use_embeddings:
         av_feature_cols.extend(["tcn_visual_emb", "wav2vec_audio_emb"])
@@ -238,8 +371,30 @@ def main():
     scaler_path = os.path.join(args.model_dir, "cfn_scaler.pkl")
 
     for epoch in range(args.epochs):
-        train_loss = train_epoch(model, train_loader, criterion, optimizer, device, use_weights=use_weights)
-        val_loss, val_acc, val_auc, val_labels, val_probs = eval_epoch(model, val_loader, criterion, device)
+        use_causal = args.causal_weight > 0
+        train_loss = train_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            device,
+            use_weights=use_weights,
+            use_causal=use_causal,
+            causal_weight=args.causal_weight,
+            loss_type=args.loss,
+            focal_alpha=args.focal_alpha,
+            focal_gamma=args.focal_gamma,
+        )
+        val_loss, val_acc, val_auc, val_labels, val_probs = eval_epoch(
+            model,
+            val_loader,
+            criterion,
+            device,
+            use_causal=use_causal,
+            loss_type=args.loss,
+            focal_alpha=args.focal_alpha,
+            focal_gamma=args.focal_gamma,
+        )
         sweep = threshold_sweep(val_labels, val_probs)
         if args.scheduler == "cosine":
             scheduler.step()
@@ -273,6 +428,13 @@ def main():
     print("Best AUC:", best_auc)
     print("Learned alpha (AV causal weight):", model.alpha.item())
     print("Learned beta (Physical causal weight):", model.beta.item())
+    if args.causal_weight > 0:
+        # Report average causal penalty on the validation set
+        model.eval()
+        with torch.no_grad():
+            _, av_h, phys_h = model.branch_outputs(X_av_val.to(device), X_phys_val.to(device))
+            causal_pen = model.causal_penalty(av_h, phys_h).item()
+        print("Validation causal penalty:", causal_pen)
     print(f"✔ CFN model saved to {model_path}")
     if scaler is not None:
         print(f"✔ Scaler saved to {scaler_path}")

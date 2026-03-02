@@ -1,0 +1,41 @@
+Epoch 01 | train_loss=1.3957 val_loss=0.6817 val_acc=0.565 val_auc=0.687 pr_auc=0.988 best_f1=0.988 best_thr=0.431
+Epoch 02 | train_loss=1.3656 val_loss=0.6678 val_acc=0.601 val_auc=0.712 pr_auc=0.989 best_f1=0.988 best_thr=0.339
+Epoch 03 | train_loss=1.3395 val_loss=0.6589 val_acc=0.597 val_auc=0.725 pr_auc=0.990 best_f1=0.988 best_thr=0.188
+Epoch 04 | train_loss=1.3138 val_loss=0.6174 val_acc=0.662 val_auc=0.735 pr_auc=0.990 best_f1=0.988 best_thr=0.088
+Epoch 05 | train_loss=1.2869 val_loss=0.6146 val_acc=0.651 val_auc=0.738 pr_auc=0.991 best_f1=0.988 best_thr=0.045
+Epoch 06 | train_loss=1.2818 val_loss=0.6112 val_acc=0.650 val_auc=0.741 pr_auc=0.991 best_f1=0.988 best_thr=0.045
+Epoch 07 | train_loss=1.2671 val_loss=0.6326 val_acc=0.623 val_auc=0.741 pr_auc=0.991 best_f1=0.988 best_thr=0.031
+Epoch 08 | train_loss=1.2545 val_loss=0.5647 val_acc=0.707 val_auc=0.744 pr_auc=0.991 best_f1=0.988 best_thr=0.036
+Epoch 09 | train_loss=1.2460 val_loss=0.6219 val_acc=0.634 val_auc=0.743 pr_auc=0.991 best_f1=0.988 best_thr=0.019
+Epoch 10 | train_loss=1.2350 val_loss=0.6438 val_acc=0.608 val_auc=0.747 pr_auc=0.991 best_f1=0.988 best_thr=0.014
+Epoch 11 | train_loss=1.2243 val_loss=0.6487 val_acc=0.602 val_auc=0.748 pr_auc=0.990 best_f1=0.988 best_thr=0.010
+Epoch 12 | train_loss=1.2147 val_loss=0.6020 val_acc=0.646 val_auc=0.752 pr_auc=0.990 best_f1=0.988 best_thr=0.010
+Epoch 13 | train_loss=1.2139 val_loss=0.5815 val_acc=0.662 val_auc=0.753 pr_auc=0.990 best_f1=0.988 best_thr=0.010
+Epoch 14 | train_loss=1.2096 val_loss=0.5734 val_acc=0.671 val_auc=0.753 pr_auc=0.990 best_f1=0.988 best_thr=0.010
+Epoch 15 | train_loss=1.2060 val_loss=0.6342 val_acc=0.616 val_auc=0.751 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 16 | train_loss=1.2056 val_loss=0.6358 val_acc=0.616 val_auc=0.752 pr_auc=0.990 best_f1=0.988 best_thr=0.007
+Epoch 17 | train_loss=1.2023 val_loss=0.5776 val_acc=0.671 val_auc=0.752 pr_auc=0.990 best_f1=0.988 best_thr=0.009
+Epoch 18 | train_loss=1.1999 val_loss=0.6070 val_acc=0.642 val_auc=0.753 pr_auc=0.990 best_f1=0.988 best_thr=0.007
+Epoch 19 | train_loss=1.1973 val_loss=0.6288 val_acc=0.621 val_auc=0.753 pr_auc=0.990 best_f1=0.988 best_thr=0.006
+Epoch 20 | train_loss=1.1962 val_loss=0.6063 val_acc=0.642 val_auc=0.754 pr_auc=0.990 best_f1=0.988 best_thr=0.007
+Epoch 21 | train_loss=1.1960 val_loss=0.6245 val_acc=0.626 val_auc=0.753 pr_auc=0.990 best_f1=0.988 best_thr=0.006
+Epoch 22 | train_loss=1.1939 val_loss=0.5795 val_acc=0.667 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 23 | train_loss=1.1934 val_loss=0.5869 val_acc=0.660 val_auc=0.754 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 24 | train_loss=1.1946 val_loss=0.5894 val_acc=0.659 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 25 | train_loss=1.1918 val_loss=0.6021 val_acc=0.646 val_auc=0.754 pr_auc=0.990 best_f1=0.988 best_thr=0.007
+Epoch 26 | train_loss=1.1902 val_loss=0.6036 val_acc=0.644 val_auc=0.754 pr_auc=0.990 best_f1=0.988 best_thr=0.007
+Epoch 27 | train_loss=1.1906 val_loss=0.6021 val_acc=0.645 val_auc=0.754 pr_auc=0.990 best_f1=0.988 best_thr=0.007
+Epoch 28 | train_loss=1.1890 val_loss=0.5936 val_acc=0.654 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 29 | train_loss=1.1898 val_loss=0.5933 val_acc=0.653 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 30 | train_loss=1.1893 val_loss=0.5896 val_acc=0.658 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 31 | train_loss=1.1899 val_loss=0.5894 val_acc=0.657 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 32 | train_loss=1.1893 val_loss=0.5882 val_acc=0.659 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 33 | train_loss=1.1863 val_loss=0.5932 val_acc=0.654 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 34 | train_loss=1.1883 val_loss=0.5915 val_acc=0.654 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 35 | train_loss=1.1865 val_loss=0.5902 val_acc=0.656 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Best AUC: 0.7552754677754678
+Learned alpha (AV causal weight): 0.6106337308883667
+Learned beta (Physical causal weight): 0.539915919303894
+Validation causal penalty: 0.05240209400653839
+✔ CFN model saved to models/cfn_emb.pth
+✔ Scaler saved to models/cfn_scaler.pkl

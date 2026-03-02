@@ -30,17 +30,29 @@ def smooth_fake_probs(frames, window):
     return frames, "fake_prob_smooth"
 
 
-def summarize_video(frames, prob_thresh=0.6, ratio_thresh=0.3, prob_key="fake_prob"):
+def summarize_video(frames, prob_thresh=0.6, ratio_thresh=0.3, prob_key="fake_prob", flag_key=None, require_flag=False):
     """
     Decide if video is fake based on proportion of suspicious frames
-    using the chosen probability key (raw or smoothed).
+    using the chosen probability key (raw or smoothed) and optional
+    causal/SCM flags. When require_flag=True, a frame must satisfy
+    both the probability threshold and the flag to be counted.
     """
     if not frames:
         return 0, 0.0, []
 
-    suspicious_frames = [
-        f for f in frames if f.get(prob_key, 0.0) >= prob_thresh
-    ]
+    if flag_key and require_flag:
+        suspicious_frames = [
+            f for f in frames
+            if f.get(prob_key, 0.0) >= prob_thresh and f.get(flag_key)
+        ]
+    else:
+        suspicious_frames = [
+            f for f in frames if f.get(prob_key, 0.0) >= prob_thresh
+        ]
+        if flag_key:
+            suspicious_frames.extend(
+                [f for f in frames if f.get(flag_key) and f not in suspicious_frames]
+            )
 
     fake_ratio = len(suspicious_frames) / len(frames)
     video_fake = int(fake_ratio >= ratio_thresh)
@@ -174,6 +186,7 @@ class CausalInferenceEngine:
     max_seconds: float | None
     enable_scm: bool = False
     scm_z_thresh: float = 2.0
+    require_flag: bool = True  # AND rule by default to curb false positives
 
     def run(self, video_path: str):
         frame_results = run_cfn_on_video(
@@ -203,10 +216,18 @@ class CausalInferenceEngine:
             prob_thresh=self.prob_thresh,
             ratio_thresh=self.ratio_thresh,
             prob_key=prob_key,
+            flag_key=flag_key,
+            require_flag=self.require_flag,  # AND rule by default
         )
 
         overall_score = overall_video_score(frame_results, prob_key=prob_key)
         causal_breach_score = overall_video_score(frame_results, prob_key="causal_breach_score")
+
+        # If classified real, clear breach artifacts to avoid confusing users
+        if not video_fake:
+            highlight_times = []
+            causal_segments = []
+            causal_breach_score = 0.0
 
         return {
             "video_fake": video_fake,

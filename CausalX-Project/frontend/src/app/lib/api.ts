@@ -2,6 +2,10 @@ const API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replac
   /\/+$/,
   "",
 );
+const DEFAULT_POLL_INTERVAL_MS = Number(import.meta.env.VITE_ANALYSIS_POLL_MS || 2000);
+const DEFAULT_TIMEOUT_MS = Number(import.meta.env.VITE_ANALYSIS_TIMEOUT_MS || 15 * 60 * 1000);
+const ALLOW_DIRECT_FALLBACK =
+  String(import.meta.env.VITE_ALLOW_DIRECT_FALLBACK || "false").toLowerCase() === "true";
 
 export type FrameResult = {
   timestamp: number;
@@ -86,7 +90,10 @@ export async function analyzeVideo(
   file: File,
   options: { pollIntervalMs?: number; timeoutMs?: number } = {},
 ): Promise<AnalyzeResponse> {
-  const { pollIntervalMs = 2000, timeoutMs = 5 * 60 * 1000 } = options;
+  const {
+    pollIntervalMs = Number.isFinite(DEFAULT_POLL_INTERVAL_MS) ? DEFAULT_POLL_INTERVAL_MS : 2000,
+    timeoutMs = Number.isFinite(DEFAULT_TIMEOUT_MS) ? DEFAULT_TIMEOUT_MS : 15 * 60 * 1000,
+  } = options;
 
   try {
     const submit = await submitAsyncAnalysis(file);
@@ -94,7 +101,7 @@ export async function analyzeVideo(
 
     while (true) {
       if (Date.now() - start > timeoutMs) {
-        throw new Error("Analysis timed out. Please try a shorter video.");
+        throw new Error(`Analysis timed out after ${Math.round(timeoutMs / 1000)}s. Please try a shorter video.`);
       }
 
       const status = await fetchAsyncStatus(submit.job_id);
@@ -108,6 +115,9 @@ export async function analyzeVideo(
       await sleep(pollIntervalMs);
     }
   } catch (error: any) {
+    if (!ALLOW_DIRECT_FALLBACK) {
+      throw error;
+    }
     const message = error?.message || "";
     if (message.includes("404") || message.includes("405")) {
       return runDirectAnalysis(file);

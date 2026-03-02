@@ -1,0 +1,39 @@
+Epoch 01 | train_loss=1.4010 val_loss=0.6813 val_acc=0.580 val_auc=0.684 pr_auc=0.988 best_f1=0.988 best_thr=0.436
+Epoch 02 | train_loss=1.3697 val_loss=0.6692 val_acc=0.606 val_auc=0.711 pr_auc=0.989 best_f1=0.988 best_thr=0.353
+Epoch 03 | train_loss=1.3466 val_loss=0.6628 val_acc=0.595 val_auc=0.723 pr_auc=0.990 best_f1=0.988 best_thr=0.217
+Epoch 04 | train_loss=1.3221 val_loss=0.6201 val_acc=0.666 val_auc=0.733 pr_auc=0.990 best_f1=0.988 best_thr=0.103
+Epoch 05 | train_loss=1.2932 val_loss=0.6160 val_acc=0.653 val_auc=0.737 pr_auc=0.990 best_f1=0.988 best_thr=0.050
+Epoch 06 | train_loss=1.2864 val_loss=0.6122 val_acc=0.655 val_auc=0.740 pr_auc=0.991 best_f1=0.988 best_thr=0.048
+Epoch 07 | train_loss=1.2709 val_loss=0.6363 val_acc=0.624 val_auc=0.740 pr_auc=0.991 best_f1=0.988 best_thr=0.031
+Epoch 08 | train_loss=1.2573 val_loss=0.5591 val_acc=0.716 val_auc=0.742 pr_auc=0.991 best_f1=0.988 best_thr=0.038
+Epoch 09 | train_loss=1.2483 val_loss=0.6214 val_acc=0.638 val_auc=0.742 pr_auc=0.990 best_f1=0.988 best_thr=0.018
+Epoch 10 | train_loss=1.2368 val_loss=0.6500 val_acc=0.602 val_auc=0.746 pr_auc=0.990 best_f1=0.988 best_thr=0.013
+Epoch 11 | train_loss=1.2263 val_loss=0.6532 val_acc=0.600 val_auc=0.747 pr_auc=0.990 best_f1=0.988 best_thr=0.010
+Epoch 12 | train_loss=1.2170 val_loss=0.6073 val_acc=0.640 val_auc=0.751 pr_auc=0.990 best_f1=0.988 best_thr=0.010
+Epoch 13 | train_loss=1.2165 val_loss=0.5840 val_acc=0.658 val_auc=0.752 pr_auc=0.990 best_f1=0.988 best_thr=0.011
+Epoch 14 | train_loss=1.2116 val_loss=0.5780 val_acc=0.663 val_auc=0.751 pr_auc=0.990 best_f1=0.988 best_thr=0.012
+Epoch 15 | train_loss=1.2088 val_loss=0.6409 val_acc=0.606 val_auc=0.749 pr_auc=0.990 best_f1=0.988 best_thr=0.010
+Epoch 16 | train_loss=1.2062 val_loss=0.6222 val_acc=0.623 val_auc=0.750 pr_auc=0.990 best_f1=0.988 best_thr=0.010
+Epoch 17 | train_loss=1.2037 val_loss=0.5795 val_acc=0.668 val_auc=0.751 pr_auc=0.990 best_f1=0.988 best_thr=0.011
+Epoch 18 | train_loss=1.2006 val_loss=0.5993 val_acc=0.642 val_auc=0.753 pr_auc=0.990 best_f1=0.988 best_thr=0.009
+Epoch 19 | train_loss=1.1981 val_loss=0.6318 val_acc=0.614 val_auc=0.753 pr_auc=0.990 best_f1=0.988 best_thr=0.007
+Epoch 20 | train_loss=1.1968 val_loss=0.6078 val_acc=0.634 val_auc=0.753 pr_auc=0.990 best_f1=0.988 best_thr=0.009
+Epoch 21 | train_loss=1.1967 val_loss=0.6543 val_acc=0.595 val_auc=0.752 pr_auc=0.990 best_f1=0.988 best_thr=0.006
+Epoch 22 | train_loss=1.1947 val_loss=0.5559 val_acc=0.690 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.009
+Epoch 23 | train_loss=1.1941 val_loss=0.5839 val_acc=0.661 val_auc=0.753 pr_auc=0.990 best_f1=0.988 best_thr=0.009
+Epoch 24 | train_loss=1.1951 val_loss=0.5885 val_acc=0.658 val_auc=0.753 pr_auc=0.990 best_f1=0.988 best_thr=0.009
+Epoch 25 | train_loss=1.1921 val_loss=0.6057 val_acc=0.638 val_auc=0.753 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 26 | train_loss=1.1901 val_loss=0.6124 val_acc=0.631 val_auc=0.753 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 27 | train_loss=1.1911 val_loss=0.6039 val_acc=0.640 val_auc=0.753 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 28 | train_loss=1.1887 val_loss=0.5936 val_acc=0.653 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.009
+Epoch 29 | train_loss=1.1889 val_loss=0.6026 val_acc=0.642 val_auc=0.754 pr_auc=0.990 best_f1=0.988 best_thr=0.008
+Epoch 30 | train_loss=1.1876 val_loss=0.5784 val_acc=0.667 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.009
+Epoch 31 | train_loss=1.1887 val_loss=0.5824 val_acc=0.662 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.009
+Epoch 32 | train_loss=1.1877 val_loss=0.5895 val_acc=0.657 val_auc=0.755 pr_auc=0.990 best_f1=0.988 best_thr=0.009
+Early stopping triggered.
+Best AUC: 0.7553757053757054
+Learned alpha (AV causal weight): 0.6397958993911743
+Learned beta (Physical causal weight): 0.5386285185813904
+Validation causal penalty: 0.03733624145388603
+✔ CFN model saved to models/cfn_emb.pth
+✔ Scaler saved to models/cfn_scaler.pkl

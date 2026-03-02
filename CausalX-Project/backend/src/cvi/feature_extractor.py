@@ -1,16 +1,21 @@
+import os
 import numpy as np
-import torch
+
+from src.modules.embeddings import visual_tcn_embedding, wav2vec_embedding
 
 
 class FeatureExtractor:
     """
-    Lightweight embedding helpers (placeholder for future models).
+    Embedding helpers for visual TCN and wav2vec2.
+    Falls back to zeros if checkpoints/models are missing.
     """
 
+    def __init__(self):
+        self.visual_ckpt = os.getenv("CFN_VISUAL_TCN_PATH")
+        self.wav2vec_model = os.getenv("CFN_W2V2_MODEL", "WAV2VEC2_BASE")
+
     def get_visual_embeddings(self, lip_signal: np.ndarray):
-        # Placeholder: return zero embeddings; replace with real model if available.
-        return np.zeros((len(lip_signal), 1), dtype=np.float32)
+        return visual_tcn_embedding(lip_signal, checkpoint=self.visual_ckpt)
 
     def get_audio_embeddings(self, waveform: np.ndarray, sr: int):
-        # Placeholder: return zero embeddings; replace with real model if available.
-        return np.zeros((len(waveform), 1), dtype=np.float32)
+        return wav2vec_embedding(waveform, sr, model_name=self.wav2vec_model)

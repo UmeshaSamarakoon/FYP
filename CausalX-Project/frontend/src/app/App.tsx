@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { VideoUpload } from '@/app/components/VideoUpload';
 import { VideoAnalysis } from '@/app/components/VideoAnalysis';
-import { EvaluationMetrics } from '@/app/components/EvaluationMetrics';
 import { ResearchDescription } from '@/app/components/ResearchDescription';
 import { Logo } from '@/app/components/Logo';
 import { Button } from '@/app/components/ui/button';
@@ -157,11 +156,6 @@ export default function App() {
               causalBreachScore={analysisResult.causalBreachScore}
               probThreshold={PROB_THRESHOLD}
             />
-          </div>
-
-          <div className="pt-6">
-            <h2 className="text-2xl font-bold mb-6">Model Evaluation Metrics</h2>
-            <EvaluationMetrics />
           </div>
 
           <div className="pt-6">
