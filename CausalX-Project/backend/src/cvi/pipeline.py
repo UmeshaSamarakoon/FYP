@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import os
 
 import numpy as np
 from src.cvi.frame_causal_extractor import (
@@ -151,6 +152,60 @@ def overall_video_score(frames, prob_key="fake_prob"):
     return float(np.mean([f.get(prob_key, 0.0) for f in frames]))
 
 
+def build_video_feature_vector(frames, prob_key="fake_prob"):
+    """
+    Build a compact video-level feature vector from frame-level signals.
+    This keeps the feature extraction pipeline unchanged and only adds a
+    lightweight decision layer on top.
+    """
+    if not frames:
+        return np.zeros(15, dtype=np.float32)
+
+    probs = np.array([f.get(prob_key, 0.0) for f in frames], dtype=np.float32)
+    mism = np.array([f.get("av_mismatch", 0.0) for f in frames], dtype=np.float32)
+    probs = np.nan_to_num(probs, nan=0.0, posinf=1.0, neginf=0.0)
+    mism = np.nan_to_num(mism, nan=0.0, posinf=1.0, neginf=0.0)
+
+    def _stats(x):
+        return (
+            float(np.mean(x)),
+            float(np.std(x)),
+            float(np.percentile(x, 90)),
+            float(np.percentile(x, 95)),
+            float(np.max(x)),
+        )
+
+    p_mean, p_std, p_p90, p_p95, p_max = _stats(probs)
+    m_mean, m_std, m_p90, m_p95, m_max = _stats(mism)
+
+    p_std_val = float(np.std(probs))
+    m_std_val = float(np.std(mism))
+    if len(probs) > 1 and p_std_val > 1e-8 and m_std_val > 1e-8:
+        p_center = probs - float(np.mean(probs))
+        m_center = mism - float(np.mean(mism))
+        corr = float(np.mean(p_center * m_center) / (p_std_val * m_std_val))
+        if not np.isfinite(corr):
+            corr = 0.0
+    else:
+        corr = 0.0
+
+    ratio_p70 = float(np.mean(probs >= 0.70))
+    ratio_p80 = float(np.mean(probs >= 0.80))
+    ratio_m70 = float(np.mean(mism >= 0.70))
+    ratio_m80 = float(np.mean(mism >= 0.80))
+
+    return np.array(
+        [
+            p_mean, p_std, p_p90, p_p95, p_max,
+            m_mean, m_std, m_p90, m_p95, m_max,
+            corr,
+            ratio_p70, ratio_p80,
+            ratio_m70, ratio_m80,
+        ],
+        dtype=np.float32,
+    )
+
+
 @dataclass
 class FeatureExtractor:
     """
@@ -184,9 +239,48 @@ class CausalInferenceEngine:
     chunk_seconds: int
     causal_thresh: float
     max_seconds: float | None
+    target_fps: float | None = None
+    include_bboxes: bool = True
     enable_scm: bool = False
     scm_z_thresh: float = 2.0
     require_flag: bool = True  # AND rule by default to curb false positives
+    calibrator_path: str | None = None
+    calibrator_thresh: float = 0.5
+    _calibrator: object | None = field(default=None, init=False, repr=False)
+    _calibrator_load_attempted: bool = field(default=False, init=False, repr=False)
+
+    def _load_calibrator(self):
+        if self._calibrator_load_attempted:
+            return self._calibrator
+        self._calibrator_load_attempted = True
+
+        if not self.calibrator_path:
+            return None
+        if not os.path.exists(self.calibrator_path):
+            return None
+        try:
+            import joblib
+
+            payload = joblib.load(self.calibrator_path)
+            self._calibrator = payload.get("model", payload) if isinstance(payload, dict) else payload
+        except Exception:
+            self._calibrator = None
+        return self._calibrator
+
+    def _calibrator_predict(self, frames, prob_key):
+        model = self._load_calibrator()
+        if model is None:
+            return None
+        x = build_video_feature_vector(frames, prob_key=prob_key).reshape(1, -1)
+        try:
+            if hasattr(model, "predict_proba"):
+                return float(model.predict_proba(x)[0, 1])
+            if hasattr(model, "decision_function"):
+                z = float(model.decision_function(x)[0])
+                return float(1.0 / (1.0 + np.exp(-z)))
+        except Exception:
+            return None
+        return None
 
     def run(self, video_path: str):
         frame_results = run_cfn_on_video(
@@ -195,6 +289,8 @@ class CausalInferenceEngine:
             causal_threshold=self.causal_thresh,
             chunk_seconds=self.chunk_seconds,
             max_seconds=self.max_seconds,
+            target_fps=self.target_fps,
+            include_bboxes=self.include_bboxes,
         )
 
         frame_results, prob_key = smooth_fake_probs(frame_results, self.smooth_window)
@@ -219,6 +315,14 @@ class CausalInferenceEngine:
             flag_key=flag_key,
             require_flag=self.require_flag,  # AND rule by default
         )
+        legacy_fake_ratio = confidence
+        decision_source = "threshold_rule"
+
+        calibrator_score = self._calibrator_predict(frame_results, prob_key=prob_key)
+        if calibrator_score is not None:
+            video_fake = int(calibrator_score >= float(self.calibrator_thresh))
+            confidence = float(calibrator_score)
+            decision_source = "video_calibrator"
 
         overall_score = overall_video_score(frame_results, prob_key=prob_key)
         causal_breach_score = overall_video_score(frame_results, prob_key="causal_breach_score")
@@ -238,6 +342,9 @@ class CausalInferenceEngine:
             "causal_breach_score": causal_breach_score,
             "frames": frame_results,
             "scm_enabled": self.enable_scm,
+            "decision_source": decision_source,
+            "legacy_fake_ratio": legacy_fake_ratio,
+            "calibrator_score": calibrator_score,
         }
 
 

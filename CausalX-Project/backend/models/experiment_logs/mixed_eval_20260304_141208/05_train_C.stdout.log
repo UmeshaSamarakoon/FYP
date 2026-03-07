@@ -1,0 +1,25 @@
+Loaded 23485 rows from data/processed/causal_multimodal_dataset_dfdc_boost.csv; using 23485 rows after --train-source=all filter.
+Applied group balancing across 4 dataset-label groups.
+Applied hard-negative weight to 0 training rows.
+Using WeightedRandomSampler for train batches.
+Epoch 01 | train_loss=1.3757 val_loss=0.1468 val_acc=0.035 val_auc=0.614 pr_auc=0.975 best_f1=0.982 best_thr=0.203
+Epoch 02 | train_loss=0.7818 val_loss=0.2353 val_acc=0.035 val_auc=0.656 pr_auc=0.976 best_f1=0.982 best_thr=0.035
+Epoch 03 | train_loss=0.4163 val_loss=0.3773 val_acc=0.035 val_auc=0.664 pr_auc=0.977 best_f1=0.982 best_thr=0.005
+Epoch 04 | train_loss=0.2238 val_loss=0.5536 val_acc=0.035 val_auc=0.665 pr_auc=0.978 best_f1=0.982 best_thr=0.001
+Epoch 05 | train_loss=0.1356 val_loss=0.7304 val_acc=0.035 val_auc=0.663 pr_auc=0.978 best_f1=0.982 best_thr=0.001
+Epoch 06 | train_loss=0.0895 val_loss=0.8882 val_acc=0.035 val_auc=0.659 pr_auc=0.978 best_f1=0.982 best_thr=0.000
+Epoch 07 | train_loss=0.0657 val_loss=1.0230 val_acc=0.035 val_auc=0.652 pr_auc=0.978 best_f1=0.982 best_thr=0.000
+Epoch 08 | train_loss=0.0507 val_loss=1.1388 val_acc=0.035 val_auc=0.642 pr_auc=0.978 best_f1=0.982 best_thr=0.000
+Epoch 09 | train_loss=0.0413 val_loss=1.2367 val_acc=0.035 val_auc=0.633 pr_auc=0.977 best_f1=0.982 best_thr=0.000
+Epoch 10 | train_loss=0.0349 val_loss=1.3207 val_acc=0.035 val_auc=0.623 pr_auc=0.977 best_f1=0.982 best_thr=0.000
+Epoch 11 | train_loss=0.0299 val_loss=1.3945 val_acc=0.035 val_auc=0.615 pr_auc=0.976 best_f1=0.982 best_thr=0.000
+Epoch 12 | train_loss=0.0274 val_loss=1.4535 val_acc=0.035 val_auc=0.607 pr_auc=0.976 best_f1=0.982 best_thr=0.000
+Epoch 13 | train_loss=0.0246 val_loss=1.5033 val_acc=0.035 val_auc=0.600 pr_auc=0.975 best_f1=0.982 best_thr=0.000
+Epoch 14 | train_loss=0.0225 val_loss=1.5496 val_acc=0.035 val_auc=0.593 pr_auc=0.975 best_f1=0.982 best_thr=0.000
+Early stopping triggered.
+Best AUC: 0.6654587227540045
+Learned alpha (AV causal weight): 0.573850691318512
+Learned beta (Physical causal weight): 0.44795775413513184
+Validation causal penalty: 0.03658611327409744
+✔ CFN model saved to models/cfn_emb.pth
+✔ Scaler saved to models/cfn_scaler.pkl

@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/src/training/train_cfn.py", line 566, in <module>
+    main()
+  File "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/src/training/train_cfn.py", line 421, in main
+    hn_paths = load_hard_negative_paths(args.hard_negative_file)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/src/training/train_cfn.py", line 267, in load_hard_negative_paths
+    raise RuntimeError("Hard-negative file must include a 'path' column.")
+RuntimeError: Hard-negative file must include a 'path' column.

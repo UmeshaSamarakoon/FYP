@@ -1,0 +1,45 @@
+Using seed: 42
+Loaded 15248 rows from data/processed/causal_multimodal_dataset_mixed_train.csv; using 15248 rows after --train-source=all filter.
+Applied hard-negative weight to 0 training rows.
+Using WeightedRandomSampler for train batches.
+Epoch 01 | train_loss=0.5777 val_loss=0.1269 val_acc=0.586 val_auc=0.489 pr_auc=0.974 best_f1=0.988 best_thr=0.236
+Epoch 02 | train_loss=0.4427 val_loss=0.1702 val_acc=0.025 val_auc=0.509 pr_auc=0.974 best_f1=0.988 best_thr=0.088
+Epoch 03 | train_loss=0.3418 val_loss=0.2276 val_acc=0.025 val_auc=0.519 pr_auc=0.973 best_f1=0.988 best_thr=0.028
+Epoch 04 | train_loss=0.2760 val_loss=0.2983 val_acc=0.025 val_auc=0.527 pr_auc=0.973 best_f1=0.988 best_thr=0.010
+Epoch 05 | train_loss=0.2354 val_loss=0.3662 val_acc=0.025 val_auc=0.538 pr_auc=0.974 best_f1=0.988 best_thr=0.005
+Epoch 06 | train_loss=0.2176 val_loss=0.4101 val_acc=0.025 val_auc=0.549 pr_auc=0.975 best_f1=0.988 best_thr=0.004
+Epoch 07 | train_loss=0.2089 val_loss=0.4372 val_acc=0.025 val_auc=0.559 pr_auc=0.975 best_f1=0.988 best_thr=0.004
+Epoch 08 | train_loss=0.2047 val_loss=0.4509 val_acc=0.025 val_auc=0.569 pr_auc=0.976 best_f1=0.988 best_thr=0.005
+Epoch 09 | train_loss=0.1986 val_loss=0.4648 val_acc=0.025 val_auc=0.576 pr_auc=0.977 best_f1=0.988 best_thr=0.005
+Epoch 10 | train_loss=0.1977 val_loss=0.4666 val_acc=0.025 val_auc=0.582 pr_auc=0.977 best_f1=0.988 best_thr=0.006
+Epoch 11 | train_loss=0.1952 val_loss=0.4683 val_acc=0.025 val_auc=0.587 pr_auc=0.978 best_f1=0.988 best_thr=0.007
+Epoch 12 | train_loss=0.1932 val_loss=0.4744 val_acc=0.025 val_auc=0.590 pr_auc=0.978 best_f1=0.988 best_thr=0.007
+Epoch 13 | train_loss=0.1927 val_loss=0.4707 val_acc=0.025 val_auc=0.593 pr_auc=0.978 best_f1=0.988 best_thr=0.009
+Epoch 14 | train_loss=0.1924 val_loss=0.4684 val_acc=0.025 val_auc=0.596 pr_auc=0.979 best_f1=0.988 best_thr=0.009
+Epoch 15 | train_loss=0.1921 val_loss=0.4663 val_acc=0.025 val_auc=0.599 pr_auc=0.979 best_f1=0.988 best_thr=0.011
+Epoch 16 | train_loss=0.1907 val_loss=0.4678 val_acc=0.025 val_auc=0.600 pr_auc=0.979 best_f1=0.988 best_thr=0.012
+Epoch 17 | train_loss=0.1891 val_loss=0.4742 val_acc=0.025 val_auc=0.601 pr_auc=0.979 best_f1=0.988 best_thr=0.012
+Epoch 18 | train_loss=0.1905 val_loss=0.4727 val_acc=0.025 val_auc=0.602 pr_auc=0.979 best_f1=0.988 best_thr=0.014
+Epoch 19 | train_loss=0.1897 val_loss=0.4703 val_acc=0.025 val_auc=0.603 pr_auc=0.979 best_f1=0.988 best_thr=0.016
+Epoch 20 | train_loss=0.1896 val_loss=0.4709 val_acc=0.025 val_auc=0.604 pr_auc=0.979 best_f1=0.988 best_thr=0.017
+Epoch 21 | train_loss=0.1896 val_loss=0.4693 val_acc=0.025 val_auc=0.605 pr_auc=0.980 best_f1=0.988 best_thr=0.019
+Epoch 22 | train_loss=0.1897 val_loss=0.4684 val_acc=0.025 val_auc=0.605 pr_auc=0.980 best_f1=0.988 best_thr=0.021
+Epoch 23 | train_loss=0.1886 val_loss=0.4655 val_acc=0.025 val_auc=0.606 pr_auc=0.980 best_f1=0.988 best_thr=0.022
+Epoch 24 | train_loss=0.1872 val_loss=0.4698 val_acc=0.025 val_auc=0.605 pr_auc=0.980 best_f1=0.988 best_thr=0.021
+Epoch 25 | train_loss=0.1882 val_loss=0.4685 val_acc=0.025 val_auc=0.606 pr_auc=0.980 best_f1=0.988 best_thr=0.022
+Epoch 26 | train_loss=0.1862 val_loss=0.4723 val_acc=0.025 val_auc=0.606 pr_auc=0.980 best_f1=0.988 best_thr=0.022
+Epoch 27 | train_loss=0.1881 val_loss=0.4696 val_acc=0.025 val_auc=0.605 pr_auc=0.980 best_f1=0.988 best_thr=0.023
+Epoch 28 | train_loss=0.1881 val_loss=0.4695 val_acc=0.025 val_auc=0.606 pr_auc=0.980 best_f1=0.988 best_thr=0.024
+Epoch 29 | train_loss=0.1887 val_loss=0.4676 val_acc=0.025 val_auc=0.605 pr_auc=0.980 best_f1=0.988 best_thr=0.026
+Epoch 30 | train_loss=0.1871 val_loss=0.4697 val_acc=0.025 val_auc=0.605 pr_auc=0.980 best_f1=0.988 best_thr=0.026
+Epoch 31 | train_loss=0.1869 val_loss=0.4703 val_acc=0.025 val_auc=0.605 pr_auc=0.980 best_f1=0.988 best_thr=0.025
+Epoch 32 | train_loss=0.1883 val_loss=0.4693 val_acc=0.025 val_auc=0.605 pr_auc=0.980 best_f1=0.988 best_thr=0.026
+Epoch 33 | train_loss=0.1879 val_loss=0.4686 val_acc=0.025 val_auc=0.605 pr_auc=0.980 best_f1=0.988 best_thr=0.026
+Epoch 34 | train_loss=0.1884 val_loss=0.4673 val_acc=0.025 val_auc=0.605 pr_auc=0.980 best_f1=0.988 best_thr=0.026
+Epoch 35 | train_loss=0.1881 val_loss=0.4669 val_acc=0.025 val_auc=0.605 pr_auc=0.980 best_f1=0.988 best_thr=0.027
+Best AUC: 0.6057904761904762
+Learned alpha (AV causal weight): 0.5393527150154114
+Learned beta (Physical causal weight): 0.4426595866680145
+Validation causal penalty: 0.01462389063090086
+✔ CFN model saved to models/ensemble/seed_42/cfn_emb.pth
+✔ Scaler saved to models/ensemble/seed_42/cfn_scaler.pkl

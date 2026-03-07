@@ -1,0 +1,8 @@
+Built manifest: /Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/eval_manifest_mixed.tsv (554 rows)
+Loaded cache: /Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/eval_cache_mixed_v2.json (554 rows)
+==== BEST MIXED CONFIG ====
+MacroBalAcc=0.613 MacroF1=0.653 | Overall Acc=0.641 BalAcc=0.641 Rec=0.755 Spec=0.527
+PROB=0.70 RATIO=0.62 CAUSAL=0.72 REQUIRE_FLAG=False
+[FakeAVCeleb] Acc=0.675 BalAcc=0.675 Rec=0.790 Spec=0.560 F1=0.709
+[DFDC] Acc=0.552 BalAcc=0.552 Rec=0.662 Spec=0.442 F1=0.596
+Saved results to /Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/mixed_sweep_results_v2.json

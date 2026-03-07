@@ -1,0 +1,36 @@
+Loaded manifest: /Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/eval_manifest_mixed.tsv (554 rows)
+Cached 20/554
+Cached 40/554
+Cached 60/554
+Cached 80/554
+Cached 100/554
+Cached 120/554
+Cached 140/554
+Cached 160/554
+Cached 180/554
+Cached 200/554
+Cached 220/554
+Cached 240/554
+Cached 260/554
+Cached 280/554
+Cached 300/554
+Cached 320/554
+Cached 340/554
+Cached 360/554
+Cached 380/554
+Cached 400/554
+Cached 420/554
+Cached 440/554
+Cached 460/554
+Cached 480/554
+Cached 500/554
+Cached 520/554
+Cached 540/554
+Saved cache: /Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/eval_cache_mixed_v5.json (554 rows, skipped=0)
+==== BEST MIXED CONFIG ====
+MacroBalAcc=0.613 MacroF1=0.653 | Overall Acc=0.641 BalAcc=0.641 Rec=0.755 Spec=0.527
+WorstDomainBalAcc=0.552 MinDomainRec=0.662 MinDomainSpec=0.442 Objective=hybrid_robust
+PROB=0.70 RATIO=0.62 CAUSAL=0.72 REQUIRE_FLAG=False
+[FakeAVCeleb] Acc=0.675 BalAcc=0.675 Rec=0.790 Spec=0.560 F1=0.709
+[DFDC] Acc=0.552 BalAcc=0.552 Rec=0.662 Spec=0.442 F1=0.596
+Saved results to /Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/mixed_sweep_results_v5_dfdc_boost_hn.json

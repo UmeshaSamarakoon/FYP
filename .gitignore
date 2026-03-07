@@ -31,3 +31,32 @@ interface/static/temp_results/
 
 # --- IDE (VS Code) ---
 .vscode/
+
+# --- CausalX Project (workspace-local artifacts) ---
+# Python env / caches
+CausalX-Project/backend/.venv/
+CausalX-Project/backend/**/__pycache__/
+CausalX-Project/backend/.pytest_cache/
+CausalX-Project/backend/.mypy_cache/
+
+# Runtime/generated backend files
+CausalX-Project/backend/uploads/
+CausalX-Project/backend/data/results.db
+CausalX-Project/backend/eval_cache_*.json
+CausalX-Project/backend/eval_manifest*.tsv
+
+# Large downloaded checkpoints / local model artifacts
+CausalX-Project/backend/wav2vec2_fairseq_base_ls960.pth
+CausalX-Project/backend/models/*.pth
+CausalX-Project/backend/models/*.pt
+CausalX-Project/backend/models/*.pkl
+CausalX-Project/backend/models/matrix_runs/
+
+# Notebook checkpoints
+CausalX-Project/backend/notebooks/.ipynb_checkpoints/
+
+# Frontend build/cache artifacts
+CausalX-Project/frontend/node_modules/
+CausalX-Project/frontend/dist/
+CausalX-Project/frontend/.vite/
+CausalX-Project/frontend/.env.local

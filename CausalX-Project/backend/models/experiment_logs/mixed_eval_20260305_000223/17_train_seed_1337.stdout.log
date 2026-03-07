@@ -1,0 +1,27 @@
+Using seed: 1337
+Loaded 15248 rows from data/processed/causal_multimodal_dataset_mixed_train.csv; using 15248 rows after --train-source=all filter.
+Applied hard-negative weight to 0 training rows.
+Using WeightedRandomSampler for train batches.
+Epoch 01 | train_loss=0.3439 val_loss=0.2351 val_acc=0.025 val_auc=0.598 pr_auc=0.981 best_f1=0.988 best_thr=0.303
+Epoch 02 | train_loss=0.2725 val_loss=0.2995 val_acc=0.025 val_auc=0.632 pr_auc=0.984 best_f1=0.988 best_thr=0.205
+Epoch 03 | train_loss=0.2314 val_loss=0.3669 val_acc=0.025 val_auc=0.645 pr_auc=0.985 best_f1=0.988 best_thr=0.147
+Epoch 04 | train_loss=0.2099 val_loss=0.4237 val_acc=0.025 val_auc=0.653 pr_auc=0.986 best_f1=0.988 best_thr=0.118
+Epoch 05 | train_loss=0.2018 val_loss=0.4499 val_acc=0.025 val_auc=0.656 pr_auc=0.986 best_f1=0.988 best_thr=0.122
+Epoch 06 | train_loss=0.1986 val_loss=0.4583 val_acc=0.025 val_auc=0.657 pr_auc=0.986 best_f1=0.988 best_thr=0.135
+Epoch 07 | train_loss=0.1946 val_loss=0.4653 val_acc=0.025 val_auc=0.657 pr_auc=0.985 best_f1=0.988 best_thr=0.148
+Epoch 08 | train_loss=0.1923 val_loss=0.4777 val_acc=0.025 val_auc=0.657 pr_auc=0.985 best_f1=0.988 best_thr=0.160
+Epoch 09 | train_loss=0.1926 val_loss=0.4707 val_acc=0.025 val_auc=0.655 pr_auc=0.985 best_f1=0.988 best_thr=0.177
+Epoch 10 | train_loss=0.1916 val_loss=0.4740 val_acc=0.025 val_auc=0.654 pr_auc=0.984 best_f1=0.988 best_thr=0.183
+Epoch 11 | train_loss=0.1903 val_loss=0.4756 val_acc=0.025 val_auc=0.653 pr_auc=0.984 best_f1=0.988 best_thr=0.185
+Epoch 12 | train_loss=0.1917 val_loss=0.4709 val_acc=0.025 val_auc=0.653 pr_auc=0.984 best_f1=0.988 best_thr=0.191
+Epoch 13 | train_loss=0.1891 val_loss=0.4784 val_acc=0.025 val_auc=0.651 pr_auc=0.984 best_f1=0.988 best_thr=0.187
+Epoch 14 | train_loss=0.1892 val_loss=0.4766 val_acc=0.025 val_auc=0.651 pr_auc=0.983 best_f1=0.988 best_thr=0.190
+Epoch 15 | train_loss=0.1888 val_loss=0.4736 val_acc=0.025 val_auc=0.649 pr_auc=0.983 best_f1=0.988 best_thr=0.192
+Epoch 16 | train_loss=0.1889 val_loss=0.4736 val_acc=0.025 val_auc=0.649 pr_auc=0.983 best_f1=0.988 best_thr=0.190
+Early stopping triggered.
+Best AUC: 0.6573848739495798
+Learned alpha (AV causal weight): 0.586048424243927
+Learned beta (Physical causal weight): 0.5264607071876526
+Validation causal penalty: 0.01314028911292553
+✔ CFN model saved to models/ensemble/seed_1337/cfn_emb.pth
+✔ Scaler saved to models/ensemble/seed_1337/cfn_scaler.pkl

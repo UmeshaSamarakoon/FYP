@@ -1,0 +1,30 @@
+Using seed: 42
+Loaded 21784 rows from data/processed/causal_multimodal_dataset.csv; using 21784 rows after --train-source=all filter.
+Using dataset+label stratified split across 4 groups.
+Applied group balancing across 4 dataset-label groups.
+Using WeightedRandomSampler for train batches.
+Epoch 01 | train_loss=5.5563 val_loss=0.1693 val_acc=0.025 val_auc=0.572 pr_auc=0.981 best_f1=0.987 best_thr=0.130 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Checkpoint skipped (constraints): worst_spec=1.000<0.300 or worst_rec=0.000<0.500
+Epoch 02 | train_loss=2.0566 val_loss=0.3009 val_acc=0.025 val_auc=0.564 pr_auc=0.981 best_f1=0.987 best_thr=0.010 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Checkpoint skipped (constraints): worst_spec=1.000<0.300 or worst_rec=0.000<0.500
+Epoch 03 | train_loss=0.8434 val_loss=0.4705 val_acc=0.025 val_auc=0.552 pr_auc=0.980 best_f1=0.987 best_thr=0.001 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Checkpoint skipped (constraints): worst_spec=1.000<0.300 or worst_rec=0.000<0.500
+Epoch 04 | train_loss=0.4866 val_loss=0.6447 val_acc=0.025 val_auc=0.547 pr_auc=0.979 best_f1=0.987 best_thr=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Checkpoint skipped (constraints): worst_spec=1.000<0.300 or worst_rec=0.000<0.500
+Epoch 05 | train_loss=0.3439 val_loss=0.8028 val_acc=0.025 val_auc=0.545 pr_auc=0.978 best_f1=0.987 best_thr=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Checkpoint skipped (constraints): worst_spec=1.000<0.300 or worst_rec=0.000<0.500
+Epoch 06 | train_loss=0.2673 val_loss=0.9407 val_acc=0.025 val_auc=0.545 pr_auc=0.978 best_f1=0.987 best_thr=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Checkpoint skipped (constraints): worst_spec=1.000<0.300 or worst_rec=0.000<0.500
+Epoch 07 | train_loss=0.2091 val_loss=1.0638 val_acc=0.025 val_auc=0.546 pr_auc=0.978 best_f1=0.987 best_thr=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Checkpoint skipped (constraints): worst_spec=1.000<0.300 or worst_rec=0.000<0.500
+Epoch 08 | train_loss=0.1832 val_loss=1.1660 val_acc=0.025 val_auc=0.547 pr_auc=0.978 best_f1=0.987 best_thr=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Checkpoint skipped (constraints): worst_spec=1.000<0.300 or worst_rec=0.000<0.500
+Early stopping triggered.
+Best AUC: 0.5724604046267967
+Best selection score: -1.0
+Warning: no checkpoint met selection constraints; saving last epoch weights.
+Learned alpha (AV causal weight): 0.5626000761985779
+Learned beta (Physical causal weight): 0.45598727464675903
+Validation causal penalty: 0.15148277580738068
+✔ CFN model saved to models/cfn_emb.pth
+✔ Scaler saved to models/cfn_scaler.pkl

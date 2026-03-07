@@ -1,0 +1,24 @@
+Loaded 21784 rows from data/processed/causal_multimodal_dataset.csv; using 21784 rows after --train-source=all filter.
+Applied group balancing across 4 dataset-label groups.
+Applied hard-negative weight to 0 training rows.
+Using WeightedRandomSampler for train batches.
+Epoch 01 | train_loss=5.8243 val_loss=0.1384 val_acc=0.123 val_auc=0.484 pr_auc=0.975 best_f1=0.987 best_thr=0.255
+Epoch 02 | train_loss=3.0066 val_loss=0.2033 val_acc=0.025 val_auc=0.495 pr_auc=0.976 best_f1=0.987 best_thr=0.082
+Epoch 03 | train_loss=1.5821 val_loss=0.2956 val_acc=0.025 val_auc=0.497 pr_auc=0.976 best_f1=0.987 best_thr=0.021
+Epoch 04 | train_loss=0.9235 val_loss=0.4106 val_acc=0.025 val_auc=0.494 pr_auc=0.976 best_f1=0.987 best_thr=0.006
+Epoch 05 | train_loss=0.6129 val_loss=0.5379 val_acc=0.025 val_auc=0.490 pr_auc=0.976 best_f1=0.987 best_thr=0.003
+Epoch 06 | train_loss=0.4504 val_loss=0.6656 val_acc=0.025 val_auc=0.488 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Epoch 07 | train_loss=0.3525 val_loss=0.7844 val_acc=0.025 val_auc=0.487 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Epoch 08 | train_loss=0.2881 val_loss=0.8950 val_acc=0.025 val_auc=0.486 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Epoch 09 | train_loss=0.2385 val_loss=0.9948 val_acc=0.025 val_auc=0.486 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Epoch 10 | train_loss=0.2065 val_loss=1.0850 val_acc=0.025 val_auc=0.487 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Epoch 11 | train_loss=0.1881 val_loss=1.1657 val_acc=0.025 val_auc=0.487 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Epoch 12 | train_loss=0.1612 val_loss=1.2390 val_acc=0.025 val_auc=0.488 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Epoch 13 | train_loss=0.1458 val_loss=1.3059 val_acc=0.025 val_auc=0.489 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Early stopping triggered.
+Best AUC: 0.4968358568029079
+Learned alpha (AV causal weight): 0.5764892101287842
+Learned beta (Physical causal weight): 0.4539390504360199
+Validation causal penalty: 0.11364790797233582
+✔ CFN model saved to models/cfn_emb.pth
+✔ Scaler saved to models/cfn_scaler.pkl

@@ -54,11 +54,24 @@ def extract_frame_level_features(
     video_path,
     start_time=0.0,
     duration=None,
-    fps=None
+    fps=None,
+    target_fps=None,
+    include_frame=True,
+    include_landmarks=True,
 ):
     cap = cv2.VideoCapture(video_path)
     if fps is None:
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    fps = float(fps if fps and fps > 0 else 30.0)
+
+    stride = 1
+    if target_fps is not None:
+        try:
+            target_fps = float(target_fps)
+            if target_fps > 0 and target_fps < fps:
+                stride = max(1, int(round(fps / target_fps)))
+        except (TypeError, ValueError):
+            stride = 1
 
     if start_time > 0:
         cap.set(cv2.CAP_PROP_POS_MSEC, start_time * 1000)
@@ -117,6 +130,10 @@ def extract_frame_level_features(
         if end_time is not None and t >= end_time:
             break
 
+        if stride > 1 and ((frame_idx - int(start_time * fps)) % stride != 0):
+            frame_idx += 1
+            continue
+
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         result = FACE_MESH.process(rgb)
 
@@ -147,8 +164,8 @@ def extract_frame_level_features(
                 "timestamp": t,
                 "lip_aperture": lip_aperture,
                 "audio_rms": audio_val,
-                "landmarks": pts,
-                "frame": frame,
+                "landmarks": pts if include_landmarks else None,
+                "frame": frame if include_frame else None,
                 "jitter": jitter,
                 "jitter_std": jitter_std,
             })

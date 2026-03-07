@@ -1,0 +1,7 @@
+Saved calibrator: /Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/video_calibrator.pkl
+Validation: macro_bal_acc=0.596 dfdc_bal_acc=0.512 overall_bal_acc=0.649 overall_f1=0.694 thr=0.420
+[DFDC] bal_acc=0.512 f1=0.667 rec=0.857 spec=0.167
+[FakeAVCeleb] bal_acc=0.680 f1=0.704 rec=0.760 spec=0.600
+Set env:
+CFN_VIDEO_CALIBRATOR_PATH=/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/video_calibrator.pkl
+CFN_CALIBRATOR_THRESH=0.4200

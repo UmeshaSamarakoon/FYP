@@ -14,13 +14,14 @@ interface VideoAnalysisProps {
   videoFile: File;
   result: 'REAL' | 'FAKE';
   confidence: number;
+  confidenceLabel: string;
   breachSegments: CausalBreachSegment[];
   frames: FrameResult[];
   causalBreachScore?: number;
   probThreshold?: number;
 }
 
-export function VideoAnalysis({ videoFile, result, confidence, breachSegments, frames, causalBreachScore, probThreshold = 0.6 }: VideoAnalysisProps) {
+export function VideoAnalysis({ videoFile, result, confidence, confidenceLabel, breachSegments, frames, causalBreachScore, probThreshold = 0.6 }: VideoAnalysisProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -151,10 +152,6 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const isInBreach = (time: number) => {
-    return breachSegments.some(seg => time >= seg.start && time <= seg.end);
-  };
-
   const activeFrame = useMemo(() => {
     if (!frames.length) return null;
     let closest = frames[0];
@@ -169,16 +166,32 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
     return closest;
   }, [frames, currentTime]);
 
-  const showBoundingBox =
-    result === 'FAKE' &&
-    activeFrame?.bbox &&
-    activeFrame.fake_prob >= probThreshold;
-
   const currentBreach = breachSegments.find(seg => currentTime >= seg.start && currentTime <= seg.end);
   const breachScore = currentBreach?.score;
 
   const isFake = result === 'FAKE';
-  const bbox = activeFrame?.bbox;
+  const activeBboxFrame = useMemo(() => {
+    if (!isFake || !frames.length) return null;
+
+    const withBbox = frames.filter(
+      (f) => Array.isArray(f.bbox) && f.bbox.length === 4,
+    );
+    if (!withBbox.length) return null;
+
+    let closest = withBbox[0];
+    let minDiff = Math.abs(currentTime - closest.timestamp);
+    for (const f of withBbox) {
+      const diff = Math.abs(currentTime - f.timestamp);
+      if (diff < minDiff) {
+        closest = f;
+        minDiff = diff;
+      }
+    }
+    return closest;
+  }, [isFake, frames, currentTime]);
+
+  const bbox = activeBboxFrame?.bbox;
+  const showBoundingBox = isFake && Boolean(bbox);
   const bboxStyle = useMemo(() => {
     if (!bbox || !videoRef.current) return null;
     const [x1, y1, x2, y2] = bbox;
@@ -206,9 +219,9 @@ export function VideoAnalysis({ videoFile, result, confidence, breachSegments, f
             {result}
           </Badge>
           <span className="text-lg text-muted-foreground">
-            Confidence: {confidence.toFixed(1)}%
+            {confidenceLabel}: {confidence.toFixed(1)}%
           </span>
-          {typeof causalBreachScore === 'number' && (
+          {isFake && typeof causalBreachScore === 'number' && (
             <span className="text-lg text-muted-foreground">
               Causal Breach Score: {(causalBreachScore * 100).toFixed(1)}%
             </span>

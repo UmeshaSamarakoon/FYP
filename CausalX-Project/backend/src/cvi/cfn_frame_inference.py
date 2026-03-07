@@ -177,7 +177,9 @@ def run_cfn_on_video(
     threshold=0.6,
     causal_threshold=None,
     chunk_seconds=10,
-    max_seconds=None
+    max_seconds=None,
+    target_fps=None,
+    include_bboxes=True,
 ):
     """
     Returns per-frame CFN predictions with timestamps and bounding boxes.
@@ -210,7 +212,10 @@ def run_cfn_on_video(
             video_path,
             start_time=chunk_start,
             duration=current_chunk,
-            fps=fps
+            fps=fps,
+            target_fps=target_fps,
+            include_frame=include_bboxes,
+            include_landmarks=include_bboxes,
         )
 
         if len(frames) == 0:
@@ -259,7 +264,7 @@ def run_cfn_on_video(
             prob = float(np.mean(probs)) if probs else 0.0
 
             bbox = None
-            if prob >= threshold or (causal_threshold is not None and av_mismatch[i] >= causal_threshold):
+            if include_bboxes and (prob >= threshold or (causal_threshold is not None and av_mismatch[i] >= causal_threshold)):
                 bbox = mouth_bbox_from_landmarks(
                     frame.get("landmarks"),
                     frame["frame"].shape

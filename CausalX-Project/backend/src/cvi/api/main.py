@@ -44,6 +44,11 @@ def shutdown_worker():
     worker.stop()
 
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+
 @app.post("/analyze")
 async def analyze_video(file: UploadFile = File(...)):
     analysis_id = str(uuid.uuid4())
@@ -83,8 +88,13 @@ async def analyze_video(file: UploadFile = File(...)):
 async def analyze_video_async(file: UploadFile = File(...)):
     video_path = _safe_upload_path(file.filename)
 
-    with open(video_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    try:
+        with open(video_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as exc:  # noqa: BLE001
+        if os.path.exists(video_path):
+            os.remove(video_path)
+        raise HTTPException(status_code=500, detail=f"Failed to save upload: {exc}") from exc
 
     job_id = worker.submit(video_path)
 
@@ -96,7 +106,7 @@ async def analyze_video_async(file: UploadFile = File(...)):
 
 
 @app.get("/analyze/status/{job_id}")
-async def get_job_status(job_id: str):
+async def get_job_status(job_id: str, include_result: bool = False):
     record = worker.get(job_id)
     if not record:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -104,7 +114,7 @@ async def get_job_status(job_id: str):
     return {
         "job_id": record.job_id,
         "status": record.status,
-        "result": record.result,
+        "result": record.result if include_result else None,
         "error": record.error
     }
 

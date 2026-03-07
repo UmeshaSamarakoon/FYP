@@ -1,0 +1,24 @@
+{
+  "cmd": [
+    "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/.venv/bin/python",
+    "scripts/mixed_domain_sweep.py",
+    "--build-manifest",
+    "--manifest",
+    "eval_manifest_mixed.tsv",
+    "--cache",
+    "eval_cache_mixed_v2.json",
+    "--out-json",
+    "models/mixed_sweep_results_v2_constrained.json",
+    "--fakeav-root",
+    "data/raw/fakeavceleb",
+    "--dfdc-root",
+    "data/raw/dfdc/train_sample_videos",
+    "--per-class-per-dataset",
+    "200",
+    "--min-rec",
+    "0.75",
+    "--min-spec",
+    "0.50"
+  ],
+  "returncode": 0
+}

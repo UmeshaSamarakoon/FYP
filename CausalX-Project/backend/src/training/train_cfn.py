@@ -1,21 +1,21 @@
 import argparse
 import os
 import random
+import json
+from pathlib import Path
 
 import joblib
 import numpy as np
 import pandas as pd
-import numpy as np
 import torch
 from sklearn.metrics import accuracy_score, roc_auc_score, precision_recall_curve, auc
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
 
 from src.modules.causal_fusion import CausalFusionNetwork, CausalFusionNetworkV2
-from sklearn.metrics import roc_auc_score, accuracy_score
 
-SEED = 42
+DEFAULT_SEED = 42
 
 
 def set_seed(seed):
@@ -194,6 +194,83 @@ def threshold_sweep(labels, probs):
     return {"pr_auc": pr_auc, "best_f1": best_f1, "best_thr": best_thr}
 
 
+def infer_domain_labels(df: pd.DataFrame):
+    if "dataset" in df.columns:
+        return df["dataset"].astype(str).str.lower().fillna("unknown").to_numpy()
+    if "path" in df.columns:
+        path_s = df["path"].astype(str).str.lower()
+        dom = np.full(len(df), "unknown", dtype=object)
+        dom[path_s.str.contains("fakeavceleb", regex=False).to_numpy()] = "fakeavceleb"
+        dom[path_s.str.contains("dfdc", regex=False).to_numpy()] = "dfdc"
+        return dom
+    return np.array(["unknown"] * len(df), dtype=object)
+
+
+def _binary_confusion(labels, preds):
+    labels = np.asarray(labels).astype(int)
+    preds = np.asarray(preds).astype(int)
+    tp = int(np.sum((preds == 1) & (labels == 1)))
+    tn = int(np.sum((preds == 0) & (labels == 0)))
+    fp = int(np.sum((preds == 1) & (labels == 0)))
+    fn = int(np.sum((preds == 0) & (labels == 1)))
+
+    rec = tp / (tp + fn + 1e-8)
+    spec = tn / (tn + fp + 1e-8)
+    prec = tp / (tp + fp + 1e-8)
+    bal = 0.5 * (rec + spec)
+    f1 = 2 * prec * rec / (prec + rec + 1e-8)
+    acc = (tp + tn) / max(tp + tn + fp + fn, 1)
+    return {
+        "tp": tp,
+        "tn": tn,
+        "fp": fp,
+        "fn": fn,
+        "acc": acc,
+        "rec": rec,
+        "spec": spec,
+        "prec": prec,
+        "bal_acc": bal,
+        "f1": f1,
+    }
+
+
+def compute_domain_metrics(labels, probs, domains, threshold=0.5):
+    labels = np.asarray(labels).astype(int)
+    probs = np.asarray(probs, dtype=float)
+    domains = np.asarray(domains, dtype=object)
+    preds = (probs >= float(threshold)).astype(int)
+
+    overall = _binary_confusion(labels, preds)
+    per_domain = {}
+    for d in sorted(set(domains.tolist())):
+        mask = domains == d
+        if not np.any(mask):
+            continue
+        per_domain[str(d)] = _binary_confusion(labels[mask], preds[mask])
+
+    if per_domain:
+        bal_list = [m["bal_acc"] for m in per_domain.values()]
+        spec_list = [m["spec"] for m in per_domain.values()]
+        rec_list = [m["rec"] for m in per_domain.values()]
+        macro_bal = float(np.mean(bal_list))
+        worst_bal = float(np.min(bal_list))
+        worst_spec = float(np.min(spec_list))
+        worst_rec = float(np.min(rec_list))
+    else:
+        macro_bal = worst_bal = overall["bal_acc"]
+        worst_spec = overall["spec"]
+        worst_rec = overall["rec"]
+
+    return {
+        "overall": overall,
+        "per_domain": per_domain,
+        "macro_bal_acc": macro_bal,
+        "worst_bal_acc": worst_bal,
+        "worst_spec": worst_spec,
+        "worst_rec": worst_rec,
+    }
+
+
 def filter_training_sources(df, train_source):
     """
     Keep only requested data source(s) for training.
@@ -223,6 +300,94 @@ def filter_training_sources(df, train_source):
     raise RuntimeError(
         "Could not isolate FakeAVCeleb rows: missing 'dataset' or 'path' hints in input CSV."
     )
+
+
+def _norm_path(v):
+    try:
+        return Path(str(v)).expanduser().as_posix().lower()
+    except Exception:
+        return str(v).strip().lower()
+
+
+def _norm_name(v):
+    try:
+        return Path(str(v)).name.lower()
+    except Exception:
+        return str(v).strip().lower()
+
+
+def load_hard_negative_paths(path: str):
+    """
+    Load hard negatives from jsonl/csv/tsv and return a normalized path set.
+    Expected rows typically contain at least: path, label, pred.
+    """
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Hard-negative file not found: {path}")
+
+    paths = set()
+    raw_lines = [ln.strip() for ln in p.read_text().splitlines() if ln.strip()]
+    if p.suffix.lower() == ".jsonl":
+        for raw in p.read_text().splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            row_path = row.get("path")
+            if not row_path:
+                continue
+            label = row.get("label")
+            pred = row.get("pred")
+            # Prefer true hard negatives: real label predicted fake.
+            if label is not None and pred is not None:
+                if int(label) == 0 and int(pred) == 1:
+                    paths.add(_norm_path(row_path))
+            else:
+                paths.add(_norm_path(row_path))
+    else:
+        # Common notebook output: plain text file with one absolute path per line.
+        # Avoid delimiter sniffing because video paths can contain punctuation/spaces.
+        if raw_lines and all(("\t" not in ln and "," not in ln) for ln in raw_lines[:32]):
+            return set(_norm_path(ln) for ln in raw_lines)
+
+        # First try regular CSV/TSV with headers.
+        try:
+            df = pd.read_csv(p, sep=None, engine="python", on_bad_lines="skip")
+        except Exception:
+            df = None
+        if df is not None and "path" in df.columns:
+            if "label" in df.columns and "pred" in df.columns:
+                df = df[(df["label"].astype(int) == 0) & (df["pred"].astype(int) == 1)]
+            paths = set(df["path"].astype(str).map(_norm_path).tolist())
+            return paths
+
+        # Fallback for headerless TSV/CSV produced by notebook scripts:
+        # path<TAB>label<TAB>pred  (or path,label,pred)
+        for line in raw_lines:
+            if "\t" in line:
+                parts = line.rsplit("\t", 2)
+            else:
+                parts = line.rsplit(",", 2)
+
+            if not parts:
+                continue
+            row_path = parts[0].strip()
+            if not row_path or row_path.lower() == "path":
+                continue
+
+            if len(parts) >= 3:
+                try:
+                    label = int(parts[1].strip())
+                    pred = int(parts[2].strip())
+                except Exception:
+                    paths.add(_norm_path(row_path))
+                    continue
+                if label == 0 and pred == 1:
+                    paths.add(_norm_path(row_path))
+            else:
+                paths.add(_norm_path(row_path))
+
+    return paths
 
 
 def main():
@@ -268,9 +433,73 @@ def main():
         default="fakeavceleb",
         help="Training source filter. Default keeps only FakeAVCeleb rows.",
     )
+    parser.add_argument(
+        "--group-balance",
+        action="store_true",
+        help="Apply domain+label inverse-frequency sample weighting when dataset column is available.",
+    )
+    parser.add_argument(
+        "--use-weighted-sampler",
+        action="store_true",
+        help="Use WeightedRandomSampler for train batches (uses computed sample weights).",
+    )
+    parser.add_argument(
+        "--hard-negative-file",
+        type=str,
+        default=None,
+        help="Optional jsonl/csv/tsv with hard negatives to upweight (real predicted fake).",
+    )
+    parser.add_argument(
+        "--hard-negative-weight",
+        type=float,
+        default=2.0,
+        help="Multiplicative weight for matched hard-negative training rows.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_SEED,
+        help="Random seed for split and training reproducibility.",
+    )
+    parser.add_argument(
+        "--selection-metric",
+        type=str,
+        default="robust_bal",
+        choices=["auc", "robust_bal", "hybrid_robust"],
+        help="Metric used for best-checkpoint selection (default: robust_bal).",
+    )
+    parser.add_argument(
+        "--selection-threshold",
+        type=float,
+        default=0.5,
+        help="Decision threshold used for robustness metrics during selection.",
+    )
+    parser.add_argument(
+        "--selection-threshold-mode",
+        type=str,
+        default="fixed",
+        choices=["fixed", "best_f1"],
+        help=(
+            "Threshold mode for robustness metrics/checkpoint constraints: "
+            "'fixed' uses --selection-threshold, 'best_f1' uses per-epoch swept best_thr."
+        ),
+    )
+    parser.add_argument(
+        "--min-domain-spec",
+        type=float,
+        default=0.0,
+        help="Minimum worst-domain specificity required to accept a checkpoint.",
+    )
+    parser.add_argument(
+        "--min-domain-rec",
+        type=float,
+        default=0.0,
+        help="Minimum worst-domain recall required to accept a checkpoint.",
+    )
     args = parser.parse_args()
 
-    set_seed(SEED)
+    set_seed(args.seed)
+    print(f"Using seed: {args.seed}")
 
     df = pd.read_csv(args.data)
     before_rows = len(df)
@@ -289,15 +518,43 @@ def main():
     av_feats = df[av_feature_cols].values
     phys_feats = df[["jitter_mean", "jitter_std"]].values
     labels = df["label"].values
+    domain_labels = infer_domain_labels(df)
+    pos_rate = float(np.mean(labels.astype(float)))
+    print(f"Label prevalence: pos={pos_rate:.4f}, neg={1.0 - pos_rate:.4f}")
+    if args.selection_threshold_mode == "best_f1" and (pos_rate > 0.90 or pos_rate < 0.10):
+        print(
+            "Warning: --selection-threshold-mode=best_f1 with extreme class skew can "
+            "collapse specificity/recall trade-offs. Consider mode='fixed'."
+        )
 
-    X_av_train, X_av_val, X_phys_train, X_phys_val, y_train, y_val = train_test_split(
-        av_feats,
-        phys_feats,
-        labels,
+    all_idx = np.arange(len(df))
+    stratify_target = labels if len(np.unique(labels)) > 1 else None
+    domain_label_combo = np.array([f"{d}:{int(y)}" for d, y in zip(domain_labels, labels)], dtype=object)
+    combo_counts = pd.Series(domain_label_combo).value_counts()
+    if len(combo_counts) > 1 and int(combo_counts.min()) >= 2:
+        stratify_target = domain_label_combo
+        print(f"Using dataset+label stratified split across {len(combo_counts)} groups.")
+    elif stratify_target is not None:
+        print("Using label-only stratified split.")
+    else:
+        print("Split has no stratification (single class).")
+
+    idx_train, idx_val = train_test_split(
+        all_idx,
         test_size=args.val_split,
-        random_state=SEED,
-        stratify=labels if len(np.unique(labels)) > 1 else None
+        random_state=args.seed,
+        stratify=stratify_target,
     )
+    train_df = df.iloc[idx_train].copy()
+    val_df = df.iloc[idx_val].copy()
+
+    X_av_train = av_feats[idx_train]
+    X_av_val = av_feats[idx_val]
+    X_phys_train = phys_feats[idx_train]
+    X_phys_val = phys_feats[idx_val]
+    y_train_arr = labels[idx_train]
+    y_val_arr = labels[idx_val]
+    val_domains = infer_domain_labels(val_df)
 
     scaler = None
     if args.use_scaler:
@@ -312,31 +569,82 @@ def main():
 
     X_av_train = torch.tensor(X_av_train, dtype=torch.float32)
     X_phys_train = torch.tensor(X_phys_train, dtype=torch.float32)
-    y_train = torch.tensor(y_train, dtype=torch.float32).unsqueeze(1)
+    y_train = torch.tensor(y_train_arr, dtype=torch.float32).unsqueeze(1)
 
     X_av_val = torch.tensor(X_av_val, dtype=torch.float32)
     X_phys_val = torch.tensor(X_phys_val, dtype=torch.float32)
-    y_val = torch.tensor(y_val, dtype=torch.float32).unsqueeze(1)
+    y_val = torch.tensor(y_val_arr, dtype=torch.float32).unsqueeze(1)
 
     sample_weights = None
     use_weights = False
-    if len(np.unique(labels)) > 1:
-        class_counts = np.bincount(labels.astype(int))
+    sampler = None
+    if len(np.unique(y_train_arr)) > 1:
+        # Base class balancing
+        class_counts = np.bincount(y_train_arr.astype(int))
         class_weights = class_counts.sum() / np.maximum(class_counts, 1)
-        sample_weights = torch.tensor(
-            [class_weights[int(l)] for l in y_train.squeeze(1).numpy()],
-            dtype=torch.float32
-        ).unsqueeze(1)
+        sample_weights_np = np.array([class_weights[int(l)] for l in y_train_arr], dtype=np.float32)
+
+        # Optional domain+label balancing
+        if args.group_balance and "dataset" in train_df.columns:
+            grp = (
+                train_df["dataset"].astype(str).str.lower().fillna("unknown")
+                + ":"
+                + pd.Series(y_train_arr, index=train_df.index).astype(int).astype(str)
+            )
+            grp_counts = grp.value_counts().to_dict()
+            grp_weights = {k: len(grp) / max(v, 1) for k, v in grp_counts.items()}
+            sample_weights_np *= grp.map(grp_weights).to_numpy(dtype=np.float32)
+            print(f"Applied group balancing across {len(grp_weights)} dataset-label groups.")
+
+        # Optional hard-negative upweighting
+        if args.hard_negative_file:
+            hn_paths = load_hard_negative_paths(args.hard_negative_file)
+            if "path" in train_df.columns:
+                train_keys = train_df["path"].astype(str).map(_norm_path)
+                hn_lookup = hn_paths
+            elif "video_id" in train_df.columns:
+                # Support datasets that only keep clip filename (e.g., DFDC video_id).
+                train_keys = train_df["video_id"].astype(str).map(_norm_name)
+                hn_lookup = {Path(p).name.lower() for p in hn_paths}
+            else:
+                train_keys = pd.Series([""] * len(train_df), index=train_df.index)
+                hn_lookup = set()
+
+            hn_mask = train_keys.isin(hn_lookup).to_numpy() & (y_train_arr.astype(int) == 0)
+            hn_count = int(np.sum(hn_mask))
+            if hn_count > 0:
+                sample_weights_np[hn_mask] *= float(args.hard_negative_weight)
+            print(f"Applied hard-negative weight to {hn_count} training rows.")
+
+        # Normalize mean weight for stable loss scale
+        sample_weights_np = sample_weights_np / max(float(np.mean(sample_weights_np)), 1e-6)
+        sample_weights = torch.tensor(sample_weights_np, dtype=torch.float32).unsqueeze(1)
         use_weights = True
 
-    train_loader = build_loaders(
-        X_av_train,
-        X_phys_train,
-        y_train,
-        sample_weights,
-        args.batch_size,
-        shuffle=True
-    )
+        if args.use_weighted_sampler:
+            sampler = WeightedRandomSampler(
+                weights=torch.tensor(sample_weights_np, dtype=torch.double),
+                num_samples=len(sample_weights_np),
+                replacement=True,
+            )
+            print("Using WeightedRandomSampler for train batches.")
+
+    if sampler is not None:
+        if sample_weights is not None:
+            dataset = TensorDataset(X_av_train, X_phys_train, y_train, sample_weights)
+        else:
+            dataset = TensorDataset(X_av_train, X_phys_train, y_train)
+        train_loader = DataLoader(dataset, batch_size=args.batch_size, sampler=sampler)
+    else:
+        train_loader = build_loaders(
+            X_av_train,
+            X_phys_train,
+            y_train,
+            sample_weights,
+            args.batch_size,
+            shuffle=True
+        )
+
     val_loader = build_loaders(
         X_av_val,
         X_phys_val,
@@ -364,6 +672,8 @@ def main():
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.5, patience=2)
 
     best_auc = -1.0
+    best_selection_score = -1.0
+    saved_checkpoint = False
     epochs_no_improve = 0
 
     os.makedirs(args.model_dir, exist_ok=True)
@@ -396,10 +706,35 @@ def main():
             focal_gamma=args.focal_gamma,
         )
         sweep = threshold_sweep(val_labels, val_probs)
+        selection_threshold = float(args.selection_threshold)
+        if args.selection_threshold_mode == "best_f1":
+            selection_threshold = float(sweep["best_thr"])
+        domain_metrics = compute_domain_metrics(
+            val_labels,
+            val_probs,
+            val_domains,
+            threshold=selection_threshold,
+        )
         if args.scheduler == "cosine":
             scheduler.step()
         else:
             scheduler.step(val_auc)
+
+        if args.selection_metric == "auc":
+            selection_score = float(val_auc)
+        elif args.selection_metric == "hybrid_robust":
+            selection_score = (
+                0.50 * float(domain_metrics["worst_bal_acc"])
+                + 0.30 * float(domain_metrics["macro_bal_acc"])
+                + 0.20 * float(domain_metrics["overall"]["f1"])
+            )
+        else:
+            selection_score = float(domain_metrics["worst_bal_acc"])
+
+        meets_domain_constraints = (
+            float(domain_metrics["worst_spec"]) >= float(args.min_domain_spec)
+            and float(domain_metrics["worst_rec"]) >= float(args.min_domain_rec)
+        )
 
         print(
             f"Epoch {epoch + 1:02d} | "
@@ -409,15 +744,40 @@ def main():
             f"val_auc={val_auc:.3f} "
             f"pr_auc={sweep['pr_auc']:.3f} "
             f"best_f1={sweep['best_f1']:.3f} "
-            f"best_thr={sweep['best_thr']:.3f}"
+            f"best_thr={sweep['best_thr']:.3f} "
+            f"sel_thr={selection_threshold:.3f} "
+            f"worst_bal={domain_metrics['worst_bal_acc']:.3f} "
+            f"worst_spec={domain_metrics['worst_spec']:.3f} "
+            f"worst_rec={domain_metrics['worst_rec']:.3f} "
+            f"sel_score={selection_score:.3f}"
         )
 
         if val_auc > best_auc:
             best_auc = val_auc
+
+        improved = selection_score > best_selection_score
+        if improved and meets_domain_constraints:
+            best_selection_score = selection_score
             epochs_no_improve = 0
             torch.save(model.state_dict(), model_path)
+            saved_checkpoint = True
             if scaler is not None:
                 joblib.dump(scaler, scaler_path)
+        elif improved:
+            epochs_no_improve += 1
+            failed = []
+            if float(domain_metrics["worst_spec"]) < float(args.min_domain_spec):
+                failed.append(
+                    f"worst_spec={domain_metrics['worst_spec']:.3f}<{args.min_domain_spec:.3f}"
+                )
+            if float(domain_metrics["worst_rec"]) < float(args.min_domain_rec):
+                failed.append(
+                    f"worst_rec={domain_metrics['worst_rec']:.3f}<{args.min_domain_rec:.3f}"
+                )
+            print(
+                f"Checkpoint skipped (constraints): "
+                + (" and ".join(failed) if failed else "constraint check failed")
+            )
         else:
             epochs_no_improve += 1
 
@@ -426,6 +786,12 @@ def main():
             break
 
     print("Best AUC:", best_auc)
+    print("Best selection score:", best_selection_score)
+    if not saved_checkpoint:
+        print("Warning: no checkpoint met selection constraints; saving last epoch weights.")
+        torch.save(model.state_dict(), model_path)
+        if scaler is not None:
+            joblib.dump(scaler, scaler_path)
     print("Learned alpha (AV causal weight):", model.alpha.item())
     print("Learned beta (Physical causal weight):", model.beta.item())
     if args.causal_weight > 0:

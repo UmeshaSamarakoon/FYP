@@ -1,0 +1,14 @@
+Split sizes (unique videos):
+  train: 15248 val: 3268 test: 3268
+Processed rows:
+  train: 15248 val: 3268 test: 3268
+Manifest rows:
+  val: 3268 test: 3268
+Missing paths dropped:
+  val: 0 test: 0
+Outputs:
+  data/processed/causal_multimodal_dataset_mixed_train.csv
+  data/processed/causal_multimodal_dataset_mixed_val.csv
+  data/processed/causal_multimodal_dataset_mixed_test.csv
+  eval_manifest_mixed_val.tsv
+  eval_manifest_mixed_test.tsv

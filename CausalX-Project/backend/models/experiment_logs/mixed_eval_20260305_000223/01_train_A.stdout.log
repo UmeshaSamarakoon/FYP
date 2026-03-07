@@ -1,0 +1,21 @@
+Using seed: 42
+Loaded 21784 rows from data/processed/causal_multimodal_dataset.csv; using 21784 rows after --train-source=all filter.
+Applied group balancing across 4 dataset-label groups.
+Using WeightedRandomSampler for train batches.
+Epoch 01 | train_loss=5.0317 val_loss=0.1679 val_acc=0.025 val_auc=0.491 pr_auc=0.975 best_f1=0.987 best_thr=0.152
+Epoch 02 | train_loss=1.9057 val_loss=0.2965 val_acc=0.025 val_auc=0.497 pr_auc=0.976 best_f1=0.987 best_thr=0.021
+Epoch 03 | train_loss=0.8229 val_loss=0.4729 val_acc=0.025 val_auc=0.492 pr_auc=0.976 best_f1=0.987 best_thr=0.004
+Epoch 04 | train_loss=0.4816 val_loss=0.6631 val_acc=0.025 val_auc=0.488 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Epoch 05 | train_loss=0.3364 val_loss=0.8432 val_acc=0.025 val_auc=0.485 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Epoch 06 | train_loss=0.2585 val_loss=0.9991 val_acc=0.025 val_auc=0.485 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Epoch 07 | train_loss=0.2088 val_loss=1.1269 val_acc=0.025 val_auc=0.485 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Epoch 08 | train_loss=0.1696 val_loss=1.2420 val_acc=0.025 val_auc=0.487 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Epoch 09 | train_loss=0.1389 val_loss=1.3379 val_acc=0.025 val_auc=0.489 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Epoch 10 | train_loss=0.1216 val_loss=1.4174 val_acc=0.025 val_auc=0.490 pr_auc=0.976 best_f1=0.987 best_thr=0.001
+Early stopping triggered.
+Best AUC: 0.49697968149368477
+Learned alpha (AV causal weight): 0.5778714418411255
+Learned beta (Physical causal weight): 0.4538865089416504
+Validation causal penalty: 0.09888800233602524
+✔ CFN model saved to models/cfn_emb.pth
+✔ Scaler saved to models/cfn_scaler.pkl

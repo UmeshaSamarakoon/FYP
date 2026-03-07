@@ -12,6 +12,7 @@ type BreachSegment = { start: number; end: number; score: number };
 interface AnalysisResult {
   result: 'REAL' | 'FAKE';
   confidence: number;
+  confidenceLabel: string;
   causalBreachScore?: number;
   breachSegments: BreachSegment[];
   frames: FrameResult[];
@@ -78,16 +79,23 @@ export default function App() {
       const label = typeof res.video_fake === "string"
         ? res.video_fake.toUpperCase()
         : res.video_fake ? "FAKE" : "REAL";
+      const resultLabel: 'REAL' | 'FAKE' = label === "FAKE" ? "FAKE" : "REAL";
+      const fakeLikelihood = Math.max(0, Math.min(1, Number(res.fake_confidence ?? 0)));
+      const confidence = resultLabel === "FAKE"
+        ? fakeLikelihood * 100
+        : (1 - fakeLikelihood) * 100;
+      const confidenceLabel = resultLabel === "FAKE" ? "Fake Likelihood" : "Real Confidence";
 
       const frames = res.frames ?? [];
       const segments = buildSegments(frames, res.causal_segments);
 
       setUploadedFile(file);
       setAnalysisResult({
-        result: label === "FAKE" ? "FAKE" : "REAL",
-        confidence: (res.fake_confidence ?? 0) * 100,
-        causalBreachScore: res.causal_breach_score,
-        breachSegments: segments,
+        result: resultLabel,
+        confidence,
+        confidenceLabel,
+        causalBreachScore: resultLabel === "FAKE" ? res.causal_breach_score : undefined,
+        breachSegments: resultLabel === "FAKE" ? segments : [],
         frames,
       });
     } catch (err: any) {
@@ -151,6 +159,7 @@ export default function App() {
               videoFile={uploadedFile}
               result={analysisResult.result}
               confidence={analysisResult.confidence}
+              confidenceLabel={analysisResult.confidenceLabel}
               breachSegments={analysisResult.breachSegments}
               frames={analysisResult.frames}
               causalBreachScore={analysisResult.causalBreachScore}

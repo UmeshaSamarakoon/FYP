@@ -1,0 +1,2 @@
+Loaded 21784 rows from data/processed/causal_multimodal_dataset.csv; using 21784 rows after --train-source=all filter.
+Applied group balancing across 4 dataset-label groups.

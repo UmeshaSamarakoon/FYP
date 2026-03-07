@@ -1,0 +1,26 @@
+Loaded 22756 rows from data/processed/causal_multimodal_dataset_dfdc_boost.csv; using 22756 rows after --train-source=all filter.
+Applied group balancing across 4 dataset-label groups.
+Applied hard-negative weight to 0 training rows.
+Using WeightedRandomSampler for train batches.
+Epoch 01 | train_loss=1.7638 val_loss=0.1435 val_acc=0.033 val_auc=0.603 pr_auc=0.979 best_f1=0.984 best_thr=0.262
+Epoch 02 | train_loss=0.9875 val_loss=0.2228 val_acc=0.031 val_auc=0.630 pr_auc=0.980 best_f1=0.984 best_thr=0.081
+Epoch 03 | train_loss=0.5355 val_loss=0.3461 val_acc=0.031 val_auc=0.633 pr_auc=0.980 best_f1=0.984 best_thr=0.021
+Epoch 04 | train_loss=0.2981 val_loss=0.5032 val_acc=0.031 val_auc=0.631 pr_auc=0.980 best_f1=0.984 best_thr=0.009
+Epoch 05 | train_loss=0.1827 val_loss=0.6693 val_acc=0.031 val_auc=0.627 pr_auc=0.979 best_f1=0.984 best_thr=0.010
+Epoch 06 | train_loss=0.1190 val_loss=0.8216 val_acc=0.031 val_auc=0.621 pr_auc=0.978 best_f1=0.984 best_thr=0.013
+Epoch 07 | train_loss=0.0849 val_loss=0.9554 val_acc=0.031 val_auc=0.614 pr_auc=0.978 best_f1=0.984 best_thr=0.015
+Epoch 08 | train_loss=0.0644 val_loss=1.0711 val_acc=0.031 val_auc=0.607 pr_auc=0.977 best_f1=0.984 best_thr=0.017
+Epoch 09 | train_loss=0.0507 val_loss=1.1714 val_acc=0.031 val_auc=0.600 pr_auc=0.977 best_f1=0.984 best_thr=0.016
+Epoch 10 | train_loss=0.0415 val_loss=1.2594 val_acc=0.031 val_auc=0.592 pr_auc=0.976 best_f1=0.984 best_thr=0.013
+Epoch 11 | train_loss=0.0368 val_loss=1.3331 val_acc=0.031 val_auc=0.586 pr_auc=0.976 best_f1=0.984 best_thr=0.012
+Epoch 12 | train_loss=0.0320 val_loss=1.3998 val_acc=0.031 val_auc=0.580 pr_auc=0.976 best_f1=0.984 best_thr=0.010
+Epoch 13 | train_loss=0.0294 val_loss=1.4555 val_acc=0.031 val_auc=0.575 pr_auc=0.976 best_f1=0.984 best_thr=0.011
+Epoch 14 | train_loss=0.0271 val_loss=1.5030 val_acc=0.031 val_auc=0.569 pr_auc=0.975 best_f1=0.984 best_thr=0.010
+Epoch 15 | train_loss=0.0250 val_loss=1.5451 val_acc=0.031 val_auc=0.565 pr_auc=0.975 best_f1=0.984 best_thr=0.010
+Early stopping triggered.
+Best AUC: 0.6330761883175755
+Learned alpha (AV causal weight): 0.5763835310935974
+Learned beta (Physical causal weight): 0.4500645399093628
+Validation causal penalty: 0.032925985753536224
+✔ CFN model saved to models/cfn_emb.pth
+✔ Scaler saved to models/cfn_scaler.pkl
