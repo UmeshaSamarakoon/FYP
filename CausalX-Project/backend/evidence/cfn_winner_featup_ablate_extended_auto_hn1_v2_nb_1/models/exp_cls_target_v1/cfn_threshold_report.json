@@ -1,0 +1,64 @@
+{
+  "selection_metric": "hybrid_robust",
+  "selection_threshold_mode": "target",
+  "target_metrics": {
+    "acc": 0.9,
+    "prec": 0.95,
+    "rec": 0.88,
+    "f1": 0.9
+  },
+  "best_checkpoint_met_constraints": false,
+  "chosen_epoch_report": {
+    "epoch": 1,
+    "selection_threshold_mode": "target",
+    "selection_threshold": 0.3122808337211609,
+    "selection_metric": "hybrid_robust",
+    "selection_score": 0.5975103723311592,
+    "val_auc": 0.47430588235294124,
+    "pr_auc": 0.9743431169299919,
+    "best_f1": 0.9875518622174136,
+    "best_f1_threshold": 0.3122808337211609,
+    "overall_at_selection_threshold": {
+      "tp": 2975.0,
+      "tn": 0.0,
+      "fp": 75.0,
+      "fn": 0.0,
+      "acc": 0.9754098360655737,
+      "rec": 0.9999999999966387,
+      "spec": 0.0,
+      "prec": 0.9754098360623757,
+      "bal_acc": 0.49999999999831934,
+      "f1": 0.9875518622174136
+    },
+    "worst_bal_acc": 0.4999999998275862,
+    "worst_spec": 0.0,
+    "worst_rec": 0.9999999996551724,
+    "target_metrics": {
+      "acc": 0.9,
+      "prec": 0.95,
+      "rec": 0.88,
+      "f1": 0.9
+    },
+    "targets_met": true,
+    "target_shortfall": 0.0,
+    "threshold_calibration": {
+      "threshold": 0.3122808337211609,
+      "meets_all_targets": true,
+      "target_shortfall": 0.0,
+      "priority_metric": "f1",
+      "num_feasible": 263,
+      "metrics": {
+        "tp": 2975.0,
+        "tn": 0.0,
+        "fp": 75.0,
+        "fn": 0.0,
+        "acc": 0.9754098360655737,
+        "rec": 0.9999999999966387,
+        "spec": 0.0,
+        "prec": 0.9754098360623757,
+        "bal_acc": 0.49999999999831934,
+        "f1": 0.9875518622174136
+      }
+    }
+  }
+}

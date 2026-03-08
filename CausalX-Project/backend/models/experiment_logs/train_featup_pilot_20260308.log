@@ -1,0 +1,23 @@
+Using seed: 42
+Loaded 15248 rows from data/processed/causal_multimodal_dataset_mixed_train.csv; using 15248 rows after --train-source=all filter.
+Feature profile=auto: av_dim=12 phys_dim=5
+Label prevalence: pos=0.9753, neg=0.0247
+Warning: --selection-threshold-mode=best_f1 with extreme class skew can collapse specificity/recall trade-offs. Consider mode='fixed' or explicit --target-* constraints.
+Using group+domain+label stratified split by video_id across 4 groups.
+Group split on 'video_id': train_groups=12198 val_groups=3050
+Weight application (auto) resolved to: sampler.
+Applied group balancing across 4 dataset-label groups.
+Applied hard-negative weight to 21 training rows.
+Using WeightedRandomSampler for train batches.
+Epoch 01 | train_loss=0.1119 val_loss=0.1186 val_acc=0.772 val_auc=0.491 pr_auc=0.977 best_f1=0.988 best_thr=0.444 sel_thr=0.444 sel_prec=0.975 sel_rec=1.000 sel_f1=0.988 worst_bal=0.500 worst_spec=0.000 worst_rec=1.000 sel_score=0.598
+Checkpoint skipped (constraints): worst_spec=0.000<0.050
+Early stopping triggered.
+Best AUC: 0.49136806722689075
+Best selection score: -1.0
+Warning: no checkpoint met selection constraints; saving best unconstrained epoch 1.
+✔ Threshold report saved to models/featup_pilot_20260308/cfn_threshold_report.json
+Learned alpha (AV causal weight): 0.5207186341285706
+Learned beta (Physical causal weight): 0.48742538690567017
+Validation causal penalty: 0.09644240140914917
+✔ CFN model saved to models/featup_pilot_20260308/cfn_emb.pth
+✔ Scaler saved to models/featup_pilot_20260308/cfn_scaler.pkl

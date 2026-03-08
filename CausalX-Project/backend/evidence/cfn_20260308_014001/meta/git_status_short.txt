@@ -1,0 +1,25 @@
+ M eval_manifest_balanced.tsv
+ M models/cfn_emb.pth
+ M models/cfn_scaler.pkl
+ M models/visual_tcn.pth
+ M notebooks/CFN_accuracy_colab_notes.ipynb
+ M src/cvi/cfn_frame_inference.py
+ M src/cvi/face_bbox_highlighter.py
+ M src/cvi/frame_causal_extractor.py
+ M src/preprocessing/batch_feature_extractor.py
+ M src/training/train_cfn.py
+?? evidence/
+?? models/cfn_threshold_report.json
+?? models/exp_cls_target_v1/
+?? models/exp_cls_v1/
+?? models/nb_cls_bce_auto/
+?? models/nb_cls_bce_both/
+?? models/nb_cls_bce_loss/
+?? models/nb_cls_bce_sampler/
+?? models/nb_cls_downsample_bce/
+?? models/nb_cls_focal_auto/
+?? models/nb_cls_leaderboard.csv
+?? models/nb_cls_upsample_bce/
+?? scripts/archive_cfn_evidence.sh
+?? scripts/run_cfn_feature_upgrade.sh
+?? src/cvi/feature_schema.py

@@ -1,6 +1,11 @@
+import os
+
+os.environ.setdefault("MEDIAPIPE_DISABLE_GPU", "1")
+
 import cv2
 import numpy as np
 import mediapipe as mp
+import warnings
 
 try:
     mp_solutions = mp.solutions
@@ -17,10 +22,14 @@ except AttributeError:
 # Initialize MediaPipe Face Detection ONCE at module load
 mp_face_detection = mp_solutions.face_detection
 
-_face_detector = mp_face_detection.FaceDetection(
-    model_selection=0,
-    min_detection_confidence=0.5
-)
+try:
+    _face_detector = mp_face_detection.FaceDetection(
+        model_selection=0,
+        min_detection_confidence=0.5
+    )
+except Exception as exc:  # noqa: BLE001
+    warnings.warn(f"FaceDetection init failed; fallback to landmark-only mouth bbox: {exc}")
+    _face_detector = None
 
 MOUTH_LANDMARKS = [
     61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308,
@@ -70,6 +79,8 @@ def detect_face_bbox(frame):
     Uses face detection and derives a mouth ROI from the lower face region.
     """
     if frame is None:
+        return None
+    if _face_detector is None:
         return None
 
     if not hasattr(frame, "shape"):

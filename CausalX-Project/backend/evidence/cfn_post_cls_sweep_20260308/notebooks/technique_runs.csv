@@ -1,0 +1,10 @@
+timestamp,video,label,prob_thresh,ratio_thresh,smoothing,video_fake,fake_conf,segments,segment_spans
+1769356528.490179,/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/data/raw/fakeavceleb/FakeVideo-RealAudio/Caucasian (European)/women/id00071/00014_id00330_wavtolip.mp4,base,0.6,0.3,0,1,1.0,1,"[[0.0, 4.36]]"
+1769356529.204129,/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/data/raw/fakeavceleb/FakeVideo-RealAudio/Caucasian (European)/women/id00071/00014_id00330_wavtolip.mp4,smooth5,0.6,0.3,5,1,1.0,1,"[[0.0, 4.36]]"
+1769356529.784909,/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/data/raw/fakeavceleb/FakeVideo-RealAudio/Caucasian (European)/women/id00071/00014_id00330_wavtolip.mp4,strict,0.7,0.4,0,1,0.9818181818181818,2,"[[0.04, 1.8], [1.88, 4.36]]"
+1771386962.800559,/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/data/raw/fakeavceleb/FakeVideo-RealAudio/Caucasian (European)/women/id00071/00014_id00330_wavtolip.mp4,base,0.6,0.3,0,0,0.0,0,[]
+1771386963.3575108,/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/data/raw/fakeavceleb/FakeVideo-RealAudio/Caucasian (European)/women/id00071/00014_id00330_wavtolip.mp4,smooth5,0.6,0.3,5,0,0.0,0,[]
+1771386963.808406,/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/data/raw/fakeavceleb/FakeVideo-RealAudio/Caucasian (European)/women/id00071/00014_id00330_wavtolip.mp4,strict,0.7,0.4,0,0,0.0,0,[]
+1771387101.417138,/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/data/raw/fakeavceleb/FakeVideo-RealAudio/Caucasian (European)/women/id00071/00014_id00330_wavtolip.mp4,base,0.6,0.3,0,0,0.0,0,[]
+1771387101.9535098,/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/data/raw/fakeavceleb/FakeVideo-RealAudio/Caucasian (European)/women/id00071/00014_id00330_wavtolip.mp4,smooth5,0.6,0.3,5,0,0.0,0,[]
+1771387102.38032,/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/data/raw/fakeavceleb/FakeVideo-RealAudio/Caucasian (European)/women/id00071/00014_id00330_wavtolip.mp4,strict,0.7,0.4,0,0,0.0,0,[]

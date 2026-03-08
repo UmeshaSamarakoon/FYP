@@ -1,0 +1,36 @@
+{
+  "selection_metric": "auc",
+  "selection_threshold_mode": "fixed",
+  "target_metrics": {},
+  "best_checkpoint_met_constraints": false,
+  "chosen_epoch_report": {
+    "epoch": 6,
+    "selection_threshold_mode": "fixed",
+    "selection_threshold": 0.5,
+    "selection_metric": "auc",
+    "selection_score": 0.48087719298245607,
+    "val_auc": 0.48087719298245607,
+    "pr_auc": 0.48590991865229977,
+    "best_f1": 0.6666666621629631,
+    "best_f1_threshold": 0.3978355885768423,
+    "overall_at_selection_threshold": {
+      "tp": 0.0,
+      "tn": 76.0,
+      "fp": 0.0,
+      "fn": 75.0,
+      "acc": 0.5033112582781457,
+      "rec": 0.0,
+      "spec": 0.9999999998684211,
+      "prec": 0.0,
+      "bal_acc": 0.49999999993421057,
+      "f1": 0.0
+    },
+    "worst_bal_acc": 0.4999999992857143,
+    "worst_spec": 0.9999999985714286,
+    "worst_rec": 0.0,
+    "target_metrics": {},
+    "targets_met": null,
+    "target_shortfall": null,
+    "threshold_calibration": null
+  }
+}

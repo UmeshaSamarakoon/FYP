@@ -57,7 +57,7 @@ def main():
     parser = argparse.ArgumentParser(description="Build mixed-domain train/val/test splits.")
     parser.add_argument("--processed-csv", default="data/processed/causal_multimodal_dataset.csv")
     parser.add_argument("--fakeav-root", default="data/raw/fakeavceleb")
-    parser.add_argument("--dfdc-root", default="data/raw/dfdc/train_sample_videos")
+    parser.add_argument("--dfdc-root", default="data/raw/dfdc")
     parser.add_argument("--test-size", type=float, default=0.15)
     parser.add_argument("--val-size", type=float, default=0.15)
     parser.add_argument("--seed", type=int, default=42)
@@ -141,4 +141,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

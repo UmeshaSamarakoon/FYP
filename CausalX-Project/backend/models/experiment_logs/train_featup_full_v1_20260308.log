@@ -1,0 +1,32 @@
+Using seed: 42
+Loaded 15248 rows from data/processed/causal_multimodal_dataset_mixed_train.csv; using 15248 rows after --train-source=all filter.
+Feature profile=auto: av_dim=12 phys_dim=5
+Label prevalence: pos=0.9753, neg=0.0247
+Using group+domain+label stratified split by video_id across 4 groups.
+Group split on 'video_id': train_groups=12198 val_groups=3050
+Weight application (auto) resolved to: sampler.
+Applied group balancing across 4 dataset-label groups.
+Applied hard-negative weight to 21 training rows.
+Using WeightedRandomSampler for train batches.
+Epoch 01 | train_loss=0.1119 val_loss=0.1186 val_acc=0.772 val_auc=0.491 pr_auc=0.977 best_f1=0.988 best_thr=0.444 sel_thr=0.500 sel_prec=0.973 sel_rec=0.788 sel_f1=0.871 worst_bal=0.458 worst_spec=0.129 worst_rec=0.759 sel_score=0.559
+Epoch 02 | train_loss=0.0700 val_loss=0.1586 val_acc=0.048 val_auc=0.514 pr_auc=0.979 best_f1=0.988 best_thr=0.376 sel_thr=0.500 sel_prec=0.986 sel_rec=0.024 sel_f1=0.047 worst_bal=0.500 worst_spec=0.986 worst_rec=0.000 sel_score=0.410
+Epoch 03 | train_loss=0.0442 val_loss=0.2136 val_acc=0.025 val_auc=0.530 pr_auc=0.980 best_f1=0.988 best_thr=0.311 sel_thr=0.500 sel_prec=1.000 sel_rec=0.000 sel_f1=0.001 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Epoch 04 | train_loss=0.0295 val_loss=0.2755 val_acc=0.025 val_auc=0.541 pr_auc=0.980 best_f1=0.988 best_thr=0.259 sel_thr=0.500 sel_prec=0.000 sel_rec=0.000 sel_f1=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Epoch 05 | train_loss=0.0204 val_loss=0.3396 val_acc=0.025 val_auc=0.552 pr_auc=0.981 best_f1=0.988 best_thr=0.217 sel_thr=0.500 sel_prec=0.000 sel_rec=0.000 sel_f1=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Epoch 06 | train_loss=0.0156 val_loss=0.3975 val_acc=0.025 val_auc=0.562 pr_auc=0.981 best_f1=0.988 best_thr=0.187 sel_thr=0.500 sel_prec=0.000 sel_rec=0.000 sel_f1=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Epoch 07 | train_loss=0.0126 val_loss=0.4492 val_acc=0.025 val_auc=0.570 pr_auc=0.982 best_f1=0.988 best_thr=0.164 sel_thr=0.500 sel_prec=0.000 sel_rec=0.000 sel_f1=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Epoch 08 | train_loss=0.0126 val_loss=0.4701 val_acc=0.025 val_auc=0.573 pr_auc=0.982 best_f1=0.988 best_thr=0.158 sel_thr=0.500 sel_prec=0.000 sel_rec=0.000 sel_f1=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Epoch 09 | train_loss=0.0108 val_loss=0.4954 val_acc=0.025 val_auc=0.581 pr_auc=0.982 best_f1=0.988 best_thr=0.149 sel_thr=0.500 sel_prec=0.000 sel_rec=0.000 sel_f1=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Epoch 10 | train_loss=0.0095 val_loss=0.5247 val_acc=0.025 val_auc=0.586 pr_auc=0.982 best_f1=0.988 best_thr=0.140 sel_thr=0.500 sel_prec=0.000 sel_rec=0.000 sel_f1=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Epoch 11 | train_loss=0.0106 val_loss=0.5262 val_acc=0.025 val_auc=0.591 pr_auc=0.983 best_f1=0.988 best_thr=0.146 sel_thr=0.500 sel_prec=0.000 sel_rec=0.000 sel_f1=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Epoch 12 | train_loss=0.0093 val_loss=0.5372 val_acc=0.025 val_auc=0.590 pr_auc=0.983 best_f1=0.988 best_thr=0.141 sel_thr=0.500 sel_prec=0.000 sel_rec=0.000 sel_f1=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Epoch 13 | train_loss=0.0089 val_loss=0.5424 val_acc=0.025 val_auc=0.592 pr_auc=0.983 best_f1=0.988 best_thr=0.140 sel_thr=0.500 sel_prec=0.000 sel_rec=0.000 sel_f1=0.000 worst_bal=0.500 worst_spec=1.000 worst_rec=0.000 sel_score=0.400
+Early stopping triggered.
+Best AUC: 0.592416806722689
+Best selection score: 0.5590211287402047
+✔ Threshold report saved to models/featup_full_v1_20260308/cfn_threshold_report.json
+Learned alpha (AV causal weight): 0.6172425746917725
+Learned beta (Physical causal weight): 0.604284405708313
+Validation causal penalty: 0.025125136598944664
+✔ CFN model saved to models/featup_full_v1_20260308/cfn_emb.pth
+✔ Scaler saved to models/featup_full_v1_20260308/cfn_scaler.pkl

@@ -1,0 +1,23 @@
+{
+  "cmd": [
+    "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/.venv/bin/python",
+    "scripts/mine_error_paths.py",
+    "--cache",
+    "eval_cache_mixed_val.json",
+    "--prob",
+    "0.7",
+    "--ratio",
+    "0.55",
+    "--causal",
+    "0.78",
+    "--require-flag",
+    "false",
+    "--out-fp",
+    "data/processed/error_fp_val.tsv",
+    "--out-fn",
+    "data/processed/error_fn_val.tsv",
+    "--out-combined",
+    "data/processed/error_combined_val.tsv"
+  ],
+  "returncode": 0
+}

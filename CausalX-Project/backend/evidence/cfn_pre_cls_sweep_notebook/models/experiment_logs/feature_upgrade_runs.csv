@@ -1,0 +1,8 @@
+timestamp_utc,run_tag,model_dir,log_path,best_auc,best_selection_score,data_path,feature_profile
+2026-03-07T20:10:15Z,featup_pilot_20260308,models/featup_pilot_20260308,models/experiment_logs/train_featup_pilot_20260308.log,0.49136806722689075,-1.0,data/processed/causal_multimodal_dataset_mixed_train.csv,auto
+2026-03-07T20:11:00Z,featup_full_v1_20260308,models/featup_full_v1_20260308,models/experiment_logs/train_featup_full_v1_20260308.log,0.592416806722689,0.5590211287402047,data/processed/causal_multimodal_dataset_mixed_train.csv,auto
+2026-03-07T20:11:36Z,featup_target_v1_20260308,models/featup_target_v1_20260308,models/experiment_logs/train_featup_target_v1_20260308.log,0.5989473684210527,0.5920991303482792,data/processed/causal_multimodal_dataset_mixed_train.csv,auto
+2026-03-08T05:31:39Z,featup_target_precA,models/featup_target_precA,models/experiment_logs/train_featup_target_precA.log,,,data/processed/causal_multimodal_dataset_mixed_train.csv,auto
+2026-03-08T05:31:41Z,featup_target_balB,models/featup_target_balB,models/experiment_logs/train_featup_target_balB.log,,,data/processed/causal_multimodal_dataset_mixed_train.csv,auto
+2026-03-08T05:42:50Z,featup_target_precA_20260308b,models/featup_target_precA_20260308b,models/experiment_logs/train_featup_target_precA_20260308b.log,0.49526315789473685,-1.0,data/processed/causal_multimodal_dataset_mixed_train.csv,auto
+2026-03-08T05:43:02Z,featup_target_balB_20260308b,models/featup_target_balB_20260308b,models/experiment_logs/train_featup_target_balB_20260308b.log,0.4945614035087719,-1.0,data/processed/causal_multimodal_dataset_mixed_train.csv,auto

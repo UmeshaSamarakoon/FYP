@@ -1,0 +1,7 @@
+snapshot_utc=2026-03-08T05:51:28Z
+snapshot_local=2026-03-08 11:21:28 +0530
+cwd=/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend
+user=venturit
+host=Umesha-3.local
+command=/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/scripts/archive_cfn_evidence.sh pre_cls_sweep_notebook
+git_head=35c2b72903ce0c22950907a08e0251c87a7ba137

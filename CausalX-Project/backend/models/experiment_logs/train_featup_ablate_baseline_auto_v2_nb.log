@@ -1,0 +1,46 @@
+Target metrics for threshold calibration/reporting: {'prec': 0.7, 'rec': 0.7}
+Using seed: 42
+Loaded 15248 rows from data/processed/causal_multimodal_dataset_mixed_train.csv; using 15248 rows after --train-source=all filter.
+Feature profile=baseline: av_dim=5 phys_dim=2
+Label prevalence: pos=0.9753, neg=0.0247
+Warning: --selection-threshold-mode=target with extreme class skew can collapse specificity/recall trade-offs. Consider mode='fixed' or explicit --target-* constraints.
+Using group+domain+label stratified split by video_id across 4 groups.
+Group split on 'video_id': train_groups=12198 val_groups=3050
+Weight application (auto) resolved to: sampler.
+Applied group balancing across 4 dataset-label groups.
+Applied hard-negative weight to 21 training rows.
+Using WeightedRandomSampler for train batches.
+Epoch 01 | train_loss=0.1588 val_loss=0.1110 val_acc=0.972 val_auc=0.479 pr_auc=0.974 best_f1=0.988 best_thr=0.442 sel_thr=0.504 sel_prec=0.976 sel_rec=0.990 sel_f1=0.983 worst_bal=0.503 worst_spec=0.014 worst_rec=0.793 sel_score=0.613 targets_ok=Y target_gap=0.000 feasible_thr=231
+Checkpoint skipped (constraints): worst_spec=0.014<0.050
+Epoch 02 | train_loss=0.1132 val_loss=0.1361 val_acc=0.171 val_auc=0.493 pr_auc=0.974 best_f1=0.988 best_thr=0.356 sel_thr=0.484 sel_prec=0.977 sel_rec=0.811 sel_f1=0.886 worst_bal=0.507 worst_spec=0.214 worst_rec=0.414 sel_score=0.584 targets_ok=Y target_gap=0.000 feasible_thr=260
+Epoch 03 | train_loss=0.0799 val_loss=0.1685 val_acc=0.025 val_auc=0.504 pr_auc=0.975 best_f1=0.988 best_thr=0.283 sel_thr=0.440 sel_prec=0.977 sel_rec=0.959 sel_f1=0.968 worst_bal=0.510 worst_spec=0.057 worst_rec=0.621 sel_score=0.616 targets_ok=Y target_gap=0.000 feasible_thr=270
+Epoch 04 | train_loss=0.0610 val_loss=0.2100 val_acc=0.025 val_auc=0.515 pr_auc=0.976 best_f1=0.988 best_thr=0.221 sel_thr=0.404 sel_prec=0.977 sel_rec=0.952 sel_f1=0.964 worst_bal=0.506 worst_spec=0.057 worst_rec=0.586 sel_score=0.611 targets_ok=Y target_gap=0.000 feasible_thr=274
+Epoch 05 | train_loss=0.0467 val_loss=0.2581 val_acc=0.025 val_auc=0.529 pr_auc=0.978 best_f1=0.988 best_thr=0.180 sel_thr=0.375 sel_prec=0.976 sel_rec=0.886 sel_f1=0.929 worst_bal=0.502 worst_spec=0.114 worst_rec=0.552 sel_score=0.599 targets_ok=Y target_gap=0.000 feasible_thr=272
+Epoch 06 | train_loss=0.0388 val_loss=0.3107 val_acc=0.025 val_auc=0.535 pr_auc=0.979 best_f1=0.988 best_thr=0.153 sel_thr=0.340 sel_prec=0.976 sel_rec=0.887 sel_f1=0.929 worst_bal=0.493 worst_spec=0.114 worst_rec=0.586 sel_score=0.582 targets_ok=Y target_gap=0.000 feasible_thr=267
+Epoch 07 | train_loss=0.0331 val_loss=0.3613 val_acc=0.025 val_auc=0.538 pr_auc=0.979 best_f1=0.988 best_thr=0.138 sel_thr=0.288 sel_prec=0.976 sel_rec=0.986 sel_f1=0.981 worst_bal=0.501 worst_spec=0.014 worst_rec=0.828 sel_score=0.599 targets_ok=Y target_gap=0.000 feasible_thr=262
+Epoch 08 | train_loss=0.0291 val_loss=0.3985 val_acc=0.025 val_auc=0.536 pr_auc=0.979 best_f1=0.988 best_thr=0.129 sel_thr=0.268 sel_prec=0.976 sel_rec=0.987 sel_f1=0.981 worst_bal=0.501 worst_spec=0.014 worst_rec=0.862 sel_score=0.602 targets_ok=Y target_gap=0.000 feasible_thr=256
+Epoch 09 | train_loss=0.0273 val_loss=0.4278 val_acc=0.025 val_auc=0.538 pr_auc=0.979 best_f1=0.988 best_thr=0.126 sel_thr=0.274 sel_prec=0.976 sel_rec=0.943 sel_f1=0.959 worst_bal=0.500 worst_spec=0.057 worst_rec=0.828 sel_score=0.609 targets_ok=Y target_gap=0.000 feasible_thr=251
+Epoch 10 | train_loss=0.0239 val_loss=0.4604 val_acc=0.025 val_auc=0.535 pr_auc=0.979 best_f1=0.988 best_thr=0.126 sel_thr=0.262 sel_prec=0.976 sel_rec=0.936 sel_f1=0.956 worst_bal=0.504 worst_spec=0.071 worst_rec=0.828 sel_score=0.611 targets_ok=Y target_gap=0.000 feasible_thr=244
+Epoch 11 | train_loss=0.0240 val_loss=0.4616 val_acc=0.025 val_auc=0.536 pr_auc=0.979 best_f1=0.988 best_thr=0.174 sel_thr=0.261 sel_prec=0.976 sel_rec=0.946 sel_f1=0.961 worst_bal=0.509 worst_spec=0.071 worst_rec=0.828 sel_score=0.615 targets_ok=Y target_gap=0.000 feasible_thr=216
+Epoch 12 | train_loss=0.0212 val_loss=0.4685 val_acc=0.025 val_auc=0.537 pr_auc=0.978 best_f1=0.988 best_thr=0.207 sel_thr=0.257 sel_prec=0.977 sel_rec=0.955 sel_f1=0.966 worst_bal=0.514 worst_spec=0.071 worst_rec=0.897 sel_score=0.624 targets_ok=Y target_gap=0.000 feasible_thr=184
+Epoch 13 | train_loss=0.0210 val_loss=0.4712 val_acc=0.025 val_auc=0.536 pr_auc=0.978 best_f1=0.988 best_thr=0.221 sel_thr=0.256 sel_prec=0.977 sel_rec=0.961 sel_f1=0.969 worst_bal=0.517 worst_spec=0.071 worst_rec=0.897 sel_score=0.627 targets_ok=Y target_gap=0.000 feasible_thr=166
+Epoch 14 | train_loss=0.0208 val_loss=0.4691 val_acc=0.025 val_auc=0.537 pr_auc=0.977 best_f1=0.988 best_thr=0.230 sel_thr=0.258 sel_prec=0.977 sel_rec=0.959 sel_f1=0.968 worst_bal=0.516 worst_spec=0.071 worst_rec=0.931 sel_score=0.629 targets_ok=Y target_gap=0.000 feasible_thr=154
+Epoch 15 | train_loss=0.0197 val_loss=0.4781 val_acc=0.025 val_auc=0.537 pr_auc=0.977 best_f1=0.988 best_thr=0.229 sel_thr=0.258 sel_prec=0.977 sel_rec=0.951 sel_f1=0.964 worst_bal=0.512 worst_spec=0.071 worst_rec=0.862 sel_score=0.620 targets_ok=Y target_gap=0.000 feasible_thr=150
+Epoch 16 | train_loss=0.0204 val_loss=0.4734 val_acc=0.025 val_auc=0.532 pr_auc=0.976 best_f1=0.988 best_thr=0.233 sel_thr=0.260 sel_prec=0.977 sel_rec=0.957 sel_f1=0.967 worst_bal=0.514 worst_spec=0.071 worst_rec=0.862 sel_score=0.622 targets_ok=Y target_gap=0.000 feasible_thr=148
+Epoch 17 | train_loss=0.0195 val_loss=0.4766 val_acc=0.025 val_auc=0.535 pr_auc=0.976 best_f1=0.988 best_thr=0.233 sel_thr=0.274 sel_prec=0.977 sel_rec=0.762 sel_f1=0.856 worst_bal=0.459 worst_spec=0.286 worst_rec=0.517 sel_score=0.548 targets_ok=Y target_gap=0.000 feasible_thr=147
+Epoch 18 | train_loss=0.0205 val_loss=0.4711 val_acc=0.025 val_auc=0.540 pr_auc=0.976 best_f1=0.988 best_thr=0.238 sel_thr=0.276 sel_prec=0.978 sel_rec=0.762 sel_f1=0.856 worst_bal=0.459 worst_spec=0.300 worst_rec=0.517 sel_score=0.549 targets_ok=Y target_gap=0.000 feasible_thr=144
+Epoch 19 | train_loss=0.0198 val_loss=0.4691 val_acc=0.025 val_auc=0.543 pr_auc=0.976 best_f1=0.988 best_thr=0.238 sel_thr=0.277 sel_prec=0.978 sel_rec=0.762 sel_f1=0.857 worst_bal=0.459 worst_spec=0.314 worst_rec=0.517 sel_score=0.550 targets_ok=Y target_gap=0.000 feasible_thr=147
+Epoch 20 | train_loss=0.0198 val_loss=0.4667 val_acc=0.025 val_auc=0.547 pr_auc=0.976 best_f1=0.988 best_thr=0.241 sel_thr=0.276 sel_prec=0.978 sel_rec=0.822 sel_f1=0.893 worst_bal=0.459 worst_spec=0.243 worst_rec=0.517 sel_score=0.557 targets_ok=Y target_gap=0.000 feasible_thr=147
+Epoch 21 | train_loss=0.0192 val_loss=0.4735 val_acc=0.025 val_auc=0.550 pr_auc=0.976 best_f1=0.988 best_thr=0.238 sel_thr=0.277 sel_prec=0.979 sel_rec=0.735 sel_f1=0.840 worst_bal=0.490 worst_spec=0.343 worst_rec=0.379 sel_score=0.567 targets_ok=Y target_gap=0.000 feasible_thr=150
+Epoch 22 | train_loss=0.0185 val_loss=0.4769 val_acc=0.025 val_auc=0.548 pr_auc=0.976 best_f1=0.988 best_thr=0.237 sel_thr=0.276 sel_prec=0.979 sel_rec=0.722 sel_f1=0.831 worst_bal=0.534 worst_spec=0.343 worst_rec=0.345 sel_score=0.599 targets_ok=Y target_gap=0.000 feasible_thr=151
+Epoch 23 | train_loss=0.0196 val_loss=0.4743 val_acc=0.025 val_auc=0.549 pr_auc=0.976 best_f1=0.988 best_thr=0.238 sel_thr=0.274 sel_prec=0.978 sel_rec=0.816 sel_f1=0.890 worst_bal=0.424 worst_spec=0.271 worst_rec=0.448 sel_score=0.535 targets_ok=Y target_gap=0.000 feasible_thr=150
+Epoch 24 | train_loss=0.0203 val_loss=0.4637 val_acc=0.025 val_auc=0.553 pr_auc=0.976 best_f1=0.988 best_thr=0.242 sel_thr=0.277 sel_prec=0.979 sel_rec=0.833 sel_f1=0.900 worst_bal=0.390 worst_spec=0.271 worst_rec=0.379 sel_score=0.516 targets_ok=Y target_gap=0.000 feasible_thr=151
+Early stopping triggered.
+Best AUC: 0.552519887955182
+Best selection score: 0.6285038617002817
+✔ Threshold report saved to models/featup_ablate_baseline_auto_v2_nb/cfn_threshold_report.json
+Learned alpha (AV causal weight): 0.4126214385032654
+Learned beta (Physical causal weight): 0.42378267645835876
+Validation causal penalty: 0.005916023161262274
+✔ CFN model saved to models/featup_ablate_baseline_auto_v2_nb/cfn_emb.pth
+✔ Scaler saved to models/featup_ablate_baseline_auto_v2_nb/cfn_scaler.pkl

@@ -1,0 +1,37 @@
+Target metrics for threshold calibration/reporting: {'prec': 0.7, 'rec': 0.7}
+Using seed: 42
+Loaded 15248 rows from data/processed/causal_multimodal_dataset_mixed_train.csv; using 15248 rows after --train-source=all filter.
+Feature profile=extended: av_dim=22 phys_dim=12
+Label prevalence: pos=0.9753, neg=0.0247
+Warning: --selection-threshold-mode=target with extreme class skew can collapse specificity/recall trade-offs. Consider mode='fixed' or explicit --target-* constraints.
+Using group+domain+label stratified split by video_id across 4 groups.
+Group split on 'video_id': train_groups=12198 val_groups=3050
+Weight application (auto) resolved to: sampler.
+Applied group balancing across 4 dataset-label groups.
+Applied hard-negative weight to 21 training rows.
+Using WeightedRandomSampler for train batches.
+Epoch 01 | train_loss=0.0606 val_loss=0.2055 val_acc=0.025 val_auc=0.449 pr_auc=0.974 best_f1=0.988 best_thr=0.353 sel_thr=0.401 sel_prec=0.976 sel_rec=0.956 sel_f1=0.966 worst_bal=0.483 worst_spec=0.000 worst_rec=0.956 sel_score=0.583 targets_ok=Y target_gap=0.000 feasible_thr=161
+Checkpoint skipped (constraints): worst_spec=0.000<0.050
+Epoch 02 | train_loss=0.0386 val_loss=0.2387 val_acc=0.025 val_auc=0.458 pr_auc=0.974 best_f1=0.988 best_thr=0.328 sel_thr=0.368 sel_prec=0.976 sel_rec=0.981 sel_f1=0.979 worst_bal=0.512 worst_spec=0.043 worst_rec=0.862 sel_score=0.608 targets_ok=Y target_gap=0.000 feasible_thr=184
+Checkpoint skipped (constraints): worst_spec=0.043<0.050
+Epoch 03 | train_loss=0.0274 val_loss=0.2842 val_acc=0.025 val_auc=0.464 pr_auc=0.974 best_f1=0.988 best_thr=0.294 sel_thr=0.339 sel_prec=0.976 sel_rec=0.966 sel_f1=0.971 worst_bal=0.512 worst_spec=0.057 worst_rec=0.828 sel_score=0.604 targets_ok=Y target_gap=0.000 feasible_thr=201
+Epoch 04 | train_loss=0.0219 val_loss=0.3362 val_acc=0.025 val_auc=0.462 pr_auc=0.974 best_f1=0.988 best_thr=0.242 sel_thr=0.289 sel_prec=0.976 sel_rec=0.992 sel_f1=0.984 worst_bal=0.511 worst_spec=0.029 worst_rec=0.828 sel_score=0.606 targets_ok=Y target_gap=0.000 feasible_thr=222
+Checkpoint skipped (constraints): worst_spec=0.029<0.050
+Epoch 05 | train_loss=0.0171 val_loss=0.3969 val_acc=0.025 val_auc=0.460 pr_auc=0.973 best_f1=0.988 best_thr=0.197 sel_thr=0.255 sel_prec=0.976 sel_rec=0.991 sel_f1=0.983 worst_bal=0.497 worst_spec=0.029 worst_rec=0.793 sel_score=0.596 targets_ok=Y target_gap=0.000 feasible_thr=227
+Epoch 06 | train_loss=0.0144 val_loss=0.4570 val_acc=0.025 val_auc=0.459 pr_auc=0.973 best_f1=0.988 best_thr=0.166 sel_thr=0.229 sel_prec=0.976 sel_rec=0.990 sel_f1=0.983 worst_bal=0.462 worst_spec=0.029 worst_rec=0.724 sel_score=0.573 targets_ok=Y target_gap=0.000 feasible_thr=226
+Epoch 07 | train_loss=0.0125 val_loss=0.5125 val_acc=0.025 val_auc=0.470 pr_auc=0.974 best_f1=0.988 best_thr=0.146 sel_thr=0.246 sel_prec=0.976 sel_rec=0.879 sel_f1=0.925 worst_bal=0.441 worst_spec=0.143 worst_rec=0.483 sel_score=0.549 targets_ok=Y target_gap=0.000 feasible_thr=226
+Epoch 08 | train_loss=0.0123 val_loss=0.5348 val_acc=0.025 val_auc=0.466 pr_auc=0.973 best_f1=0.988 best_thr=0.144 sel_thr=0.237 sel_prec=0.976 sel_rec=0.901 sel_f1=0.937 worst_bal=0.441 worst_spec=0.114 worst_rec=0.483 sel_score=0.551 targets_ok=Y target_gap=0.000 feasible_thr=225
+Epoch 09 | train_loss=0.0105 val_loss=0.5704 val_acc=0.025 val_auc=0.484 pr_auc=0.975 best_f1=0.988 best_thr=0.134 sel_thr=0.228 sel_prec=0.977 sel_rec=0.887 sel_f1=0.930 worst_bal=0.441 worst_spec=0.143 worst_rec=0.483 sel_score=0.550 targets_ok=Y target_gap=0.000 feasible_thr=223
+Epoch 10 | train_loss=0.0093 val_loss=0.6069 val_acc=0.025 val_auc=0.503 pr_auc=0.976 best_f1=0.988 best_thr=0.128 sel_thr=0.218 sel_prec=0.977 sel_rec=0.889 sel_f1=0.931 worst_bal=0.441 worst_spec=0.157 worst_rec=0.483 sel_score=0.552 targets_ok=Y target_gap=0.000 feasible_thr=221
+Epoch 11 | train_loss=0.0103 val_loss=0.6084 val_acc=0.025 val_auc=0.515 pr_auc=0.977 best_f1=0.988 best_thr=0.136 sel_thr=0.221 sel_prec=0.977 sel_rec=0.871 sel_f1=0.921 worst_bal=0.516 worst_spec=0.157 worst_rec=0.448 sel_score=0.598 targets_ok=Y target_gap=0.000 feasible_thr=218
+Epoch 12 | train_loss=0.0093 val_loss=0.6213 val_acc=0.025 val_auc=0.534 pr_auc=0.978 best_f1=0.988 best_thr=0.134 sel_thr=0.213 sel_prec=0.977 sel_rec=0.902 sel_f1=0.938 worst_bal=0.517 worst_spec=0.129 worst_rec=0.448 sel_score=0.602 targets_ok=Y target_gap=0.000 feasible_thr=216
+Epoch 13 | train_loss=0.0086 val_loss=0.6272 val_acc=0.025 val_auc=0.555 pr_auc=0.979 best_f1=0.988 best_thr=0.135 sel_thr=0.226 sel_prec=0.978 sel_rec=0.702 sel_f1=0.817 worst_bal=0.486 worst_spec=0.343 worst_rec=0.172 sel_score=0.558 targets_ok=Y target_gap=0.000 feasible_thr=212
+Early stopping triggered.
+Best AUC: 0.5547697478991597
+Best selection score: 0.6042717586273014
+✔ Threshold report saved to models/featup_ablate_extended_auto_v2_nb/cfn_threshold_report.json
+Learned alpha (AV causal weight): 0.6150872111320496
+Learned beta (Physical causal weight): 0.45960167050361633
+Validation causal penalty: 0.027555055916309357
+✔ CFN model saved to models/featup_ablate_extended_auto_v2_nb/cfn_emb.pth
+✔ Scaler saved to models/featup_ablate_extended_auto_v2_nb/cfn_scaler.pkl

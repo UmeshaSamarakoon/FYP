@@ -1,0 +1,10 @@
+CausalX-Project/backend/eval_manifest_balanced.tsv
+CausalX-Project/backend/models/cfn_emb.pth
+CausalX-Project/backend/models/cfn_scaler.pkl
+CausalX-Project/backend/models/visual_tcn.pth
+CausalX-Project/backend/notebooks/CFN_accuracy_colab_notes.ipynb
+CausalX-Project/backend/src/cvi/cfn_frame_inference.py
+CausalX-Project/backend/src/cvi/face_bbox_highlighter.py
+CausalX-Project/backend/src/cvi/frame_causal_extractor.py
+CausalX-Project/backend/src/preprocessing/batch_feature_extractor.py
+CausalX-Project/backend/src/training/train_cfn.py

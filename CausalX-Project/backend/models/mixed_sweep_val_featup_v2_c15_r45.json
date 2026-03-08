@@ -1,0 +1,68 @@
+{
+  "manifest": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/eval_manifest_mixed_val.tsv",
+  "cache": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/eval_cache_mixed_val_featup_v2.json",
+  "best": {
+    "key": [
+      0.6070453720400446,
+      0.5333333333333333,
+      0.5929468905078661,
+      0.9055198103623433
+    ],
+    "require_flag": true,
+    "prob": 0.7,
+    "ratio": 0.62,
+    "causal": 0.68,
+    "metrics": {
+      "overall": {
+        "acc": 0.8292533659730722,
+        "prec": 0.9834497977197499,
+        "rec": 0.8390335738939442,
+        "spec": 0.4444444444444444,
+        "bal_acc": 0.6417390091691944,
+        "f1": 0.9055198103623433,
+        "tp": 2674,
+        "tn": 36,
+        "fp": 45,
+        "fn": 513
+      },
+      "per_dataset": {
+        "FakeAVCeleb": {
+          "acc": 0.8298267326732673,
+          "prec": 0.9851135094901377,
+          "rec": 0.8384542286981311,
+          "spec": 0.4666666666666667,
+          "bal_acc": 0.652560447682399,
+          "f1": 0.905886379192334,
+          "tp": 2647,
+          "tn": 35,
+          "fp": 40,
+          "fn": 510
+        },
+        "DFDC": {
+          "acc": 0.7777777777777778,
+          "prec": 0.84375,
+          "rec": 0.9,
+          "spec": 0.16666666666666666,
+          "bal_acc": 0.5333333333333333,
+          "f1": 0.870967741935484,
+          "tp": 27,
+          "tn": 1,
+          "fp": 5,
+          "fn": 3
+        }
+      },
+      "macro_bal_acc": 0.5929468905078661,
+      "macro_f1": 0.888427060563909
+    },
+    "min_domain_rec": 0.8384542286981311,
+    "min_domain_spec": 0.16666666666666666,
+    "worst_domain_bal_acc": 0.5333333333333333
+  },
+  "used_fallback": false,
+  "recommend_env": {
+    "CFN_PROB_THRESH": "0.7000",
+    "CFN_RATIO_THRESH": "0.6200",
+    "CFN_CAUSAL_THRESH": "0.6800",
+    "CFN_REQUIRE_FLAG": "true"
+  }
+}

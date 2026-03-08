@@ -57,25 +57,29 @@ def get_fakeavceleb_videos(root_dir):
 # DFDC (Real-World Deepfake Dataset)
 # ------------------------------------------------------------------
 
-def get_dfdc_videos(data_root):
-    """
-    Loads DFDC videos using metadata.json
-    """
-    metadata_path = os.path.join(data_root, "metadata.json")
+def _load_dfdc_root(root_dir):
+    metadata_path = os.path.join(root_dir, "metadata.json")
     if not os.path.exists(metadata_path):
-        raise FileNotFoundError(f"metadata.json not found in {data_root}")
+        return []
 
     with open(metadata_path, "r") as f:
         metadata = json.load(f)
 
     videos = []
+    root_name = os.path.basename(os.path.normpath(root_dir))
     for filename, info in metadata.items():
-        video_path = os.path.join(data_root, filename)
+        video_path = os.path.join(root_dir, filename)
         if not os.path.exists(video_path):
             continue
 
+        # Keep historical IDs for the original sample folder to avoid duplicates.
+        if root_name == "train_sample_videos":
+            video_id = filename
+        else:
+            # Prefix other DFDC parts to avoid collisions across parts.
+            video_id = f"{root_name}__{filename}"
         videos.append({
-            "video_id": filename,
+            "video_id": video_id,
             "path": video_path,
             "label": 1 if info["label"] == "FAKE" else 0,
             "dataset": "DFDC",
@@ -83,5 +87,31 @@ def get_dfdc_videos(data_root):
             "video_fake": -1,
             "audio_fake": -1
         })
+    return videos
 
+
+def get_dfdc_videos(data_root):
+    """
+    Loads DFDC videos from one root or from multiple part-folders.
+
+    Supports:
+    - direct folder containing metadata.json
+    - parent folder containing multiple immediate child folders, each with metadata.json
+    """
+    if not os.path.isdir(data_root):
+        raise FileNotFoundError(f"DFDC root not found: {data_root}")
+
+    direct = _load_dfdc_root(data_root)
+    if direct:
+        return direct
+
+    videos = []
+    for name in sorted(os.listdir(data_root)):
+        subdir = os.path.join(data_root, name)
+        if not os.path.isdir(subdir):
+            continue
+        videos.extend(_load_dfdc_root(subdir))
+
+    if not videos:
+        raise FileNotFoundError(f"No metadata.json found under {data_root}")
     return videos

@@ -1,0 +1,19 @@
+{
+  "cmd": [
+    "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/.venv/bin/python",
+    "scripts/mixed_domain_sweep.py",
+    "--manifest",
+    "eval_manifest_mixed.tsv",
+    "--cache",
+    "eval_cache_mixed_v5.json",
+    "--out-json",
+    "models/mixed_sweep_results_v5_dfdc_boost_hn.json",
+    "--per-class-per-dataset",
+    "200",
+    "--min-rec",
+    "0.75",
+    "--min-spec",
+    "0.50"
+  ],
+  "returncode": 0
+}

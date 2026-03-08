@@ -1,0 +1,10 @@
+{
+  "source_result": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/mixed_sweep_results_v2_constrained.json",
+  "source_cache": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/eval_cache_mixed_v2.json",
+  "prob": 0.7,
+  "ratio": 0.62,
+  "causal": 0.72,
+  "require_flag": false,
+  "hard_negative_count": 131,
+  "hard_negative_file": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/data/processed/hard_negatives_mixed.tsv"
+}

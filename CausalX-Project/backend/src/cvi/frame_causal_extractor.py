@@ -25,16 +25,38 @@ except AttributeError:
 
 mp_face_mesh = mp_solutions.face_mesh
 
-FACE_MESH = mp_face_mesh.FaceMesh(
-    static_image_mode=False,
-    max_num_faces=1,
-    refine_landmarks=False,
-    min_detection_confidence=0.3,
-    min_tracking_confidence=0.3
-)
+try:
+    FACE_MESH = mp_face_mesh.FaceMesh(
+        static_image_mode=False,
+        max_num_faces=1,
+        refine_landmarks=False,
+        min_detection_confidence=0.3,
+        min_tracking_confidence=0.3
+    )
+except Exception as exc:  # noqa: BLE001
+    warnings.warn(f"FaceMesh init failed; frame-level features disabled: {exc}")
+    FACE_MESH = None
 
 LIP_TOP, LIP_BOTTOM = 13, 14
 LIP_IDX = list(range(0, 468))
+MOUTH_LEFT, MOUTH_RIGHT = 78, 308
+MOUTH_POLY = [
+    61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291,
+    308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78
+]
+MOUTH_SYM_PAIRS = [
+    (61, 291),
+    (146, 375),
+    (91, 321),
+    (181, 405),
+    (84, 314),
+    (78, 308),
+    (95, 324),
+    (88, 318),
+    (178, 402),
+    (87, 317),
+    (13, 14),
+]
 # Use rigid landmarks to approximate head motion between frames
 RIGID_ZONE = [1, 2, 4, 5, 6, 8, 9, 10, 151, 67, 103, 109, 332, 338, 297]
 
@@ -50,6 +72,31 @@ def get_video_meta(video_path):
     return fps, duration
 
 
+def _safe_corr(a, b):
+    if len(a) < 2 or len(b) < 2:
+        return 0.0
+    a = np.asarray(a, dtype=np.float32)
+    b = np.asarray(b, dtype=np.float32)
+    if np.std(a) < 1e-8 or np.std(b) < 1e-8:
+        return 0.0
+    corr = np.corrcoef(a, b)[0, 1]
+    return float(np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0))
+
+
+def _norm(x):
+    x = np.asarray(x, dtype=np.float32)
+    return (x - np.mean(x)) / (np.std(x) + 1e-6)
+
+
+def _polygon_area(points):
+    pts = np.asarray(points, dtype=np.float32)
+    if len(pts) < 3:
+        return 0.0
+    x = pts[:, 0]
+    y = pts[:, 1]
+    return float(0.5 * np.abs(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1))))
+
+
 def extract_frame_level_features(
     video_path,
     start_time=0.0,
@@ -59,6 +106,9 @@ def extract_frame_level_features(
     include_frame=True,
     include_landmarks=True,
 ):
+    if FACE_MESH is None:
+        return []
+
     cap = cv2.VideoCapture(video_path)
     if fps is None:
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
@@ -116,7 +166,12 @@ def extract_frame_level_features(
 
     frames = []
     prev_rigid = None
+    prev_lip = None
+    prev_audio = None
+    prev_mouth_area = None
+    prev_mouth_asym = None
     jitter_history = []
+    mouth_motion_history = []
     # start frame index aligns timestamps to absolute video time
     frame_idx = int(start_time * fps)
     end_time = start_time + duration if duration is not None else None
@@ -145,8 +200,34 @@ def extract_frame_level_features(
                 pts[LIP_TOP] - pts[LIP_BOTTOM]
             )
 
+            mouth_width = float(np.linalg.norm(pts[MOUTH_LEFT] - pts[MOUTH_RIGHT])) if len(pts) > MOUTH_RIGHT else 0.0
+            mouth_aspect = float(lip_aperture / (mouth_width + 1e-6)) if mouth_width > 0 else 0.0
+            mouth_area_norm = 0.0
+            mouth_asym = 0.0
+            valid_poly = [idx for idx in MOUTH_POLY if idx < len(pts)]
+            if len(valid_poly) >= 3:
+                mouth_poly = pts[valid_poly]
+                face_w = float(np.ptp(pts[:, 0]))
+                face_h = float(np.ptp(pts[:, 1]))
+                face_area = max(face_w * face_h, 1e-6)
+                mouth_area_norm = float(_polygon_area(mouth_poly) / face_area)
+            if len(pts) > MOUTH_RIGHT:
+                cx = 0.5 * float(pts[MOUTH_LEFT, 0] + pts[MOUTH_RIGHT, 0])
+                sym_errs = []
+                for li, ri in MOUTH_SYM_PAIRS:
+                    if li >= len(pts) or ri >= len(pts):
+                        continue
+                    dl = abs(cx - float(pts[li, 0]))
+                    dr = abs(float(pts[ri, 0]) - cx)
+                    sym_errs.append(abs(dl - dr) / (dl + dr + 1e-6))
+                mouth_asym = float(np.mean(sym_errs)) if sym_errs else 0.0
+
             # audio at same timestamp
             audio_val = np.interp(t, audio_times, audio_rms)
+            lip_velocity = float(lip_aperture - prev_lip) if prev_lip is not None else 0.0
+            audio_delta = float(audio_val - prev_audio) if prev_audio is not None else 0.0
+            mouth_area_delta = abs(float(mouth_area_norm - prev_mouth_area)) if prev_mouth_area is not None else 0.0
+            mouth_asym_delta = abs(float(mouth_asym - prev_mouth_asym)) if prev_mouth_asym is not None else 0.0
 
             # Approximate head jitter: mean rigid-point displacement vs previous frame
             jitter = 0.0
@@ -159,6 +240,14 @@ def extract_frame_level_features(
 
             jitter_history.append(jitter)
             jitter_std = float(np.std(jitter_history[-5:])) if len(jitter_history) >= 2 else 0.0
+            mouth_motion = 0.6 * abs(lip_velocity) + 0.4 * mouth_area_delta
+            mouth_motion_history.append(mouth_motion)
+            mouth_motion_std = float(np.std(mouth_motion_history[-5:])) if len(mouth_motion_history) >= 2 else 0.0
+
+            prev_lip = float(lip_aperture)
+            prev_audio = float(audio_val)
+            prev_mouth_area = float(mouth_area_norm)
+            prev_mouth_asym = float(mouth_asym)
 
             frames.append({
                 "timestamp": t,
@@ -168,6 +257,15 @@ def extract_frame_level_features(
                 "frame": frame if include_frame else None,
                 "jitter": jitter,
                 "jitter_std": jitter_std,
+                "lip_velocity": lip_velocity,
+                "audio_delta": audio_delta,
+                "mouth_aspect": mouth_aspect,
+                "mouth_area_norm": mouth_area_norm,
+                "mouth_area_delta": mouth_area_delta,
+                "mouth_asym": mouth_asym,
+                "mouth_asym_delta": mouth_asym_delta,
+                "mouth_motion": mouth_motion,
+                "mouth_motion_std": mouth_motion_std,
             })
 
         frame_idx += 1
@@ -176,20 +274,80 @@ def extract_frame_level_features(
     return frames
 
 def compute_av_mismatch(frames, window=5):
-    lips = np.array([f["lip_aperture"] for f in frames])
-    audio = np.array([f["audio_rms"] for f in frames])
+    return compute_av_sync_signals(frames, window=window)["mismatch"]
 
-    lips = (lips - lips.mean()) / (lips.std() + 1e-6)
-    audio = (audio - audio.mean()) / (audio.std() + 1e-6)
 
-    scores = []
-    for i in range(len(frames)):
+def compute_av_sync_signals(frames, window=5):
+    """
+    Per-frame AV sync diagnostics for stronger AV alignment modeling.
+
+    Returns arrays for:
+      - mismatch: 1 - local correlation
+      - local_corr / local_corr_std
+      - local_lag (frames), peak_corr, peak_prominence
+      - onset_corr: correlation of |lip velocity| and |audio delta|
+    """
+    n = len(frames)
+    zeros = np.zeros(n, dtype=np.float32)
+    if n == 0:
+        return {
+            "mismatch": zeros,
+            "local_corr": zeros,
+            "local_corr_std": zeros,
+            "local_lag": zeros,
+            "peak_corr": zeros,
+            "peak_prominence": zeros,
+            "onset_corr": zeros,
+        }
+
+    lips = np.array([f.get("lip_aperture", 0.0) for f in frames], dtype=np.float32)
+    audio = np.array([f.get("audio_rms", 0.0) for f in frames], dtype=np.float32)
+    lip_vel = np.array([f.get("lip_velocity", 0.0) for f in frames], dtype=np.float32)
+    aud_vel = np.array([f.get("audio_delta", 0.0) for f in frames], dtype=np.float32)
+
+    mismatch = np.zeros(n, dtype=np.float32)
+    local_corr = np.zeros(n, dtype=np.float32)
+    local_corr_std = np.zeros(n, dtype=np.float32)
+    local_lag = np.zeros(n, dtype=np.float32)
+    peak_corr = np.zeros(n, dtype=np.float32)
+    peak_prom = np.zeros(n, dtype=np.float32)
+    onset_corr = np.zeros(n, dtype=np.float32)
+
+    window = int(max(window, 1))
+    for i in range(n):
         l = max(0, i - window)
-        r = min(len(frames), i + window)
+        r = min(n, i + window + 1)
+        ls = lips[l:r]
+        au = audio[l:r]
+        corr = _safe_corr(ls, au)
+        local_corr[i] = corr
+        mismatch[i] = float(1.0 - corr)
+        local_corr_std[i] = float(np.std(_norm(ls) - _norm(au))) if len(ls) >= 2 else 0.0
 
-        corr = np.corrcoef(lips[l:r], audio[l:r])[0, 1]
-        mismatch = 1 - np.nan_to_num(corr)
+        lv = np.abs(lip_vel[l:r])
+        av = np.abs(aud_vel[l:r])
+        onset_corr[i] = _safe_corr(lv, av)
 
-        scores.append(mismatch)
+        if len(ls) >= 3:
+            ls0 = ls - np.mean(ls)
+            au0 = au - np.mean(au)
+            corr_full = np.correlate(ls0, au0, mode="full")
+            denom = float(np.linalg.norm(ls0) * np.linalg.norm(au0) + 1e-6)
+            corr_full = corr_full / denom
+            pk_idx = int(np.argmax(corr_full))
+            zero_idx = len(ls) - 1
+            pk = float(corr_full[pk_idx])
+            zc = float(corr_full[zero_idx])
+            peak_corr[i] = pk
+            peak_prom[i] = float(abs(pk - zc))
+            local_lag[i] = float(pk_idx - zero_idx)
 
-    return scores
+    return {
+        "mismatch": mismatch,
+        "local_corr": local_corr,
+        "local_corr_std": local_corr_std,
+        "local_lag": local_lag,
+        "peak_corr": peak_corr,
+        "peak_prominence": peak_prom,
+        "onset_corr": onset_corr,
+    }

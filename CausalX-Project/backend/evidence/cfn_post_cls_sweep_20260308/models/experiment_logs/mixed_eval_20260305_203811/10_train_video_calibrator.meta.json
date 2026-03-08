@@ -1,0 +1,15 @@
+{
+  "cmd": [
+    "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/.venv/bin/python",
+    "scripts/train_video_calibrator.py",
+    "--cache",
+    "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/eval_cache_mixed_v2.json",
+    "--out",
+    "models/video_calibrator.pkl",
+    "--min-rec",
+    "0.70",
+    "--min-spec",
+    "0.45"
+  ],
+  "returncode": 0
+}

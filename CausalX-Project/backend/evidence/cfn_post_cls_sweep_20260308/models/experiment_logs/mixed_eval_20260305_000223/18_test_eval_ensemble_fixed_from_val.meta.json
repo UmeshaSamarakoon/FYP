@@ -1,0 +1,21 @@
+{
+  "cmd": [
+    "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/.venv/bin/python",
+    "scripts/mixed_domain_sweep.py",
+    "--manifest",
+    "eval_manifest_mixed_test.tsv",
+    "--cache",
+    "eval_cache_mixed_test_ensemble.json",
+    "--out-json",
+    "models/mixed_test_eval_ensemble_fixed_from_val.json",
+    "--prob-grid",
+    "0.7",
+    "--ratio-grid",
+    "0.58",
+    "--causal-grid",
+    "0.75",
+    "--require-flag-options",
+    "false"
+  ],
+  "returncode": 0
+}

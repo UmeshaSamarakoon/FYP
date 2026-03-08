@@ -1,0 +1,57 @@
+ M eval_manifest_balanced.tsv
+ M models/cfn_emb.pth
+ M models/cfn_scaler.pkl
+ M models/visual_tcn.pth
+ M notebooks/CFN_accuracy_colab_notes.ipynb
+ M src/cvi/cfn_frame_inference.py
+ M src/cvi/face_bbox_highlighter.py
+ M src/cvi/frame_causal_extractor.py
+ M src/preprocessing/batch_feature_extractor.py
+ M src/training/train_cfn.py
+?? evidence/
+?? models/cfn_threshold_report.json
+?? models/exp_cls_target_v1/
+?? models/exp_cls_v1/
+?? models/experiment_logs/feature_upgrade_runs.csv
+?? models/experiment_logs/nb_scripted_target_summary.csv
+?? models/experiment_logs/train_featup_ablate_baseline_auto_nb.log
+?? models/experiment_logs/train_featup_ablate_baseline_auto_v2_nb.log
+?? models/experiment_logs/train_featup_ablate_extended_auto_hn1_nb.log
+?? models/experiment_logs/train_featup_ablate_extended_auto_hn1_v2_nb.log
+?? models/experiment_logs/train_featup_ablate_extended_auto_nb.log
+?? models/experiment_logs/train_featup_ablate_extended_auto_v2_nb.log
+?? models/experiment_logs/train_featup_full_v1_20260308.log
+?? models/experiment_logs/train_featup_pilot_20260308.log
+?? models/experiment_logs/train_featup_target_balB.log
+?? models/experiment_logs/train_featup_target_balB_20260308b.log
+?? models/experiment_logs/train_featup_target_balB_nb.log
+?? models/experiment_logs/train_featup_target_precA.log
+?? models/experiment_logs/train_featup_target_precA_20260308b.log
+?? models/experiment_logs/train_featup_target_precA_nb.log
+?? models/experiment_logs/train_featup_target_v1_20260308.log
+?? models/featup_ablate_baseline_auto_nb/
+?? models/featup_ablate_baseline_auto_v2_nb/
+?? models/featup_ablate_extended_auto_hn1_nb/
+?? models/featup_ablate_extended_auto_hn1_v2_nb/
+?? models/featup_ablate_extended_auto_nb/
+?? models/featup_ablate_extended_auto_v2_nb/
+?? models/featup_full_v1_20260308/
+?? models/featup_pilot_20260308/
+?? models/featup_target_balB/
+?? models/featup_target_balB_20260308b/
+?? models/featup_target_balB_nb/
+?? models/featup_target_precA/
+?? models/featup_target_precA_20260308b/
+?? models/featup_target_precA_nb/
+?? models/featup_target_v1_20260308/
+?? models/nb_cls_bce_auto/
+?? models/nb_cls_bce_both/
+?? models/nb_cls_bce_loss/
+?? models/nb_cls_bce_sampler/
+?? models/nb_cls_downsample_bce/
+?? models/nb_cls_focal_auto/
+?? models/nb_cls_leaderboard.csv
+?? models/nb_cls_upsample_bce/
+?? scripts/archive_cfn_evidence.sh
+?? scripts/run_cfn_feature_upgrade.sh
+?? src/cvi/feature_schema.py

@@ -1,0 +1,29 @@
+{
+  "cmd": [
+    "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/.venv/bin/python",
+    "scripts/build_mixed_splits.py",
+    "--processed-csv",
+    "data/processed/causal_multimodal_dataset.csv",
+    "--fakeav-root",
+    "data/raw/fakeavceleb",
+    "--dfdc-root",
+    "data/raw/dfdc/train_sample_videos",
+    "--test-size",
+    "0.15",
+    "--val-size",
+    "0.15",
+    "--seed",
+    "42",
+    "--out-train-csv",
+    "data/processed/causal_multimodal_dataset_mixed_train.csv",
+    "--out-val-csv",
+    "data/processed/causal_multimodal_dataset_mixed_val.csv",
+    "--out-test-csv",
+    "data/processed/causal_multimodal_dataset_mixed_test.csv",
+    "--out-val-manifest",
+    "eval_manifest_mixed_val.tsv",
+    "--out-test-manifest",
+    "eval_manifest_mixed_test.tsv"
+  ],
+  "returncode": 0
+}

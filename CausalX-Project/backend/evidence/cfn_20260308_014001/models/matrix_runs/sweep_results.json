@@ -1,0 +1,141 @@
+{
+  "manifest": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/eval_manifest_balanced.tsv",
+  "results": {
+    "A": {
+      "model_path": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/matrix_runs/cfn_emb_A.pth",
+      "scaler_path": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/matrix_runs/cfn_scaler_A.pkl",
+      "skipped": 0,
+      "best": {
+        "key": [
+          0.74,
+          0.7699115044247788,
+          0.74
+        ],
+        "require_flag": false,
+        "prob": 0.8,
+        "ratio": 0.7,
+        "causal": 0.6,
+        "metrics": {
+          "acc": 0.74,
+          "prec": 0.6904761904761905,
+          "rec": 0.87,
+          "spec": 0.61,
+          "bal_acc": 0.74,
+          "f1": 0.7699115044247788,
+          "tp": 87,
+          "tn": 61,
+          "fp": 39,
+          "fn": 13
+        }
+      }
+    },
+    "B": {
+      "model_path": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/matrix_runs/cfn_emb_B.pth",
+      "scaler_path": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/matrix_runs/cfn_scaler_B.pkl",
+      "skipped": 0,
+      "best": {
+        "key": [
+          0.75,
+          0.761904761904762,
+          0.75
+        ],
+        "require_flag": false,
+        "prob": 0.8,
+        "ratio": 0.7,
+        "causal": 0.65,
+        "metrics": {
+          "acc": 0.75,
+          "prec": 0.7272727272727273,
+          "rec": 0.8,
+          "spec": 0.7,
+          "bal_acc": 0.75,
+          "f1": 0.761904761904762,
+          "tp": 80,
+          "tn": 70,
+          "fp": 30,
+          "fn": 20
+        }
+      }
+    },
+    "C": {
+      "model_path": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/matrix_runs/cfn_emb_C.pth",
+      "scaler_path": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/matrix_runs/cfn_scaler_C.pkl",
+      "skipped": 0,
+      "best": {
+        "key": [
+          0.755,
+          0.7860262008733624,
+          0.755
+        ],
+        "require_flag": false,
+        "prob": 0.4,
+        "ratio": 0.65,
+        "causal": 0.65,
+        "metrics": {
+          "acc": 0.755,
+          "prec": 0.6976744186046512,
+          "rec": 0.9,
+          "spec": 0.61,
+          "bal_acc": 0.755,
+          "f1": 0.7860262008733624,
+          "tp": 90,
+          "tn": 61,
+          "fp": 39,
+          "fn": 10
+        }
+      }
+    },
+    "D": {
+      "model_path": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/matrix_runs/cfn_emb_D.pth",
+      "scaler_path": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/matrix_runs/cfn_scaler_D.pkl",
+      "skipped": 0,
+      "best": {
+        "key": [
+          0.76,
+          0.7857142857142856,
+          0.76
+        ],
+        "require_flag": false,
+        "prob": 0.8,
+        "ratio": 0.6,
+        "causal": 0.75,
+        "metrics": {
+          "acc": 0.76,
+          "prec": 0.7096774193548387,
+          "rec": 0.88,
+          "spec": 0.64,
+          "bal_acc": 0.76,
+          "f1": 0.7857142857142856,
+          "tp": 88,
+          "tn": 64,
+          "fp": 36,
+          "fn": 12
+        }
+      }
+    }
+  },
+  "best_global": {
+    "run_id": "D",
+    "key": [
+      0.76,
+      0.7857142857142856,
+      0.76
+    ],
+    "require_flag": false,
+    "prob": 0.8,
+    "ratio": 0.6,
+    "causal": 0.75,
+    "metrics": {
+      "acc": 0.76,
+      "prec": 0.7096774193548387,
+      "rec": 0.88,
+      "spec": 0.64,
+      "bal_acc": 0.76,
+      "f1": 0.7857142857142856,
+      "tp": 88,
+      "tn": 64,
+      "fp": 36,
+      "fn": 12
+    }
+  }
+}

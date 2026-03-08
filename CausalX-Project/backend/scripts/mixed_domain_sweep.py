@@ -156,7 +156,7 @@ def main():
     parser.add_argument("--manifest", default="eval_manifest_mixed.tsv")
     parser.add_argument("--build-manifest", action="store_true")
     parser.add_argument("--fakeav-root", default="data/raw/fakeavceleb")
-    parser.add_argument("--dfdc-root", default="data/raw/dfdc/train_sample_videos")
+    parser.add_argument("--dfdc-root", default="data/raw/dfdc")
     parser.add_argument("--per-class-per-dataset", type=int, default=100)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--cache", default="eval_cache_mixed.json")

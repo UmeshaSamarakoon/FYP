@@ -10,8 +10,14 @@ from src.modules.causal_fusion import CausalFusionNetwork, CausalFusionNetworkV2
 from src.cvi.feature_extractor import FeatureExtractor
 from src.cvi.frame_causal_extractor import (
     extract_frame_level_features,
-    compute_av_mismatch,
+    compute_av_sync_signals,
     get_video_meta
+)
+from src.cvi.feature_schema import (
+    BASELINE_AV_FEATURES,
+    EXTENDED_AV_FEATURES,
+    BASELINE_PHYS_FEATURES,
+    EXTENDED_PHYS_FEATURES,
 )
 
 # --------------------------------------------------
@@ -25,10 +31,14 @@ DEVICE = torch.device("cpu")
 _model = None
 _scaler = None
 _AV_DIM = None
+_PHYS_DIM = None
 _models = []
 _scalers = []
 _AV_DIMS = []
+_PHYS_DIMS = []
 _scaler_shape_warned = set()
+_AV_FEATURE_ORDER = list(BASELINE_AV_FEATURES) + list(EXTENDED_AV_FEATURES) + ["tcn_visual_emb", "wav2vec_audio_emb"]
+_PHYS_FEATURE_ORDER = list(BASELINE_PHYS_FEATURES) + list(EXTENDED_PHYS_FEATURES)
 
 
 def _use_embeddings() -> bool:
@@ -40,12 +50,18 @@ def _split_env_paths(value: str):
 
 
 def _build_model_from_state(state, use_emb):
-    if use_emb:
-        av_dim = state.get("av_branch.0.weight", torch.empty(0)).shape[1] if state else 4
-        model = CausalFusionNetworkV2(av_dim=av_dim, phys_dim=2).to(DEVICE)
-    else:
-        av_dim = state.get("av_branch.0.weight", torch.empty(0)).shape[1] if state else 3
+    av_dim = int(state.get("av_branch.0.weight", torch.empty(0)).shape[1]) if state else 0
+    phys_dim = int(state.get("physical_branch.0.weight", torch.empty(0)).shape[1]) if state else 0
+    if av_dim <= 0:
+        av_dim = 4 if use_emb else 3
+    if phys_dim <= 0:
+        phys_dim = 2
+
+    # Keep backward compatibility with legacy fixed-dim checkpoints.
+    if not use_emb and av_dim == 3 and phys_dim == 2:
         model = CausalFusionNetwork().to(DEVICE)
+    else:
+        model = CausalFusionNetworkV2(av_dim=av_dim, phys_dim=phys_dim).to(DEVICE)
     load_result = model.load_state_dict(state, strict=False)
     if load_result.missing_keys:
         warnings.warn(
@@ -58,7 +74,7 @@ def _build_model_from_state(state, use_emb):
             + ", ".join(load_result.unexpected_keys)
         )
     model.eval()
-    return model, av_dim
+    return model, av_dim, phys_dim
 
 
 def _load_artifacts():
@@ -66,7 +82,7 @@ def _load_artifacts():
     Lazy-load model and scaler so API can start even if artifacts are absent.
     Raises a clear RuntimeError when files are missing or corrupted.
     """
-    global _model, _scaler, _AV_DIM, _models, _scalers, _AV_DIMS
+    global _model, _scaler, _AV_DIM, _PHYS_DIM, _models, _scalers, _AV_DIMS, _PHYS_DIMS
     if _models:
         return
 
@@ -98,9 +114,10 @@ def _load_artifacts():
 
             for model_path, scaler_path in zip(model_paths, scaler_paths):
                 state = torch.load(model_path, map_location=DEVICE)
-                model, av_dim = _build_model_from_state(state, use_emb=use_emb)
+                model, av_dim, phys_dim = _build_model_from_state(state, use_emb=use_emb)
                 _models.append(model)
                 _AV_DIMS.append(av_dim)
+                _PHYS_DIMS.append(phys_dim)
                 if scaler_path.exists():
                     _scalers.append(joblib.load(scaler_path))
                 else:
@@ -109,9 +126,10 @@ def _load_artifacts():
             emb_model_path = Path(os.getenv("CFN_EMB_MODEL_PATH", _MODULE_DIR / "models" / "cfn_emb.pth"))
             model_path = emb_model_path if use_emb else MODEL_PATH
             state = torch.load(model_path, map_location=DEVICE)
-            model, av_dim = _build_model_from_state(state, use_emb=use_emb)
+            model, av_dim, phys_dim = _build_model_from_state(state, use_emb=use_emb)
             _models = [model]
             _AV_DIMS = [av_dim]
+            _PHYS_DIMS = [phys_dim]
 
             scaler_path = _MODULE_DIR / "models" / "cfn_scaler.pkl"
             if scaler_path.exists():
@@ -122,6 +140,7 @@ def _load_artifacts():
         # Backward-compatible single-model aliases
         _model = _models[0]
         _AV_DIM = _AV_DIMS[0]
+        _PHYS_DIM = _PHYS_DIMS[0]
         _scaler = _scalers[0]
     except FileNotFoundError as exc:  # noqa: PERF203
         raise RuntimeError(
@@ -132,24 +151,32 @@ def _load_artifacts():
 
     if len(_scalers) != len(_models):
         raise RuntimeError("Scaler/model count mismatch in CFN artifacts.")
+    if len(_AV_DIMS) != len(_models) or len(_PHYS_DIMS) != len(_models):
+        raise RuntimeError("Feature dimension metadata mismatch in CFN artifacts.")
 
 
-def _prepare_features_for_model(base_av_vals, base_phys_vals, av_dim, scaler):
+def _prepare_features_for_model(base_av_vals, base_phys_vals, av_dim, phys_dim, scaler):
     av_vals = list(base_av_vals)
     if av_dim and len(av_vals) < av_dim:
         av_vals.extend([0.0] * (av_dim - len(av_vals)))
     if av_dim and len(av_vals) > av_dim:
         av_vals = av_vals[:av_dim]
 
+    phys_vals = list(base_phys_vals)
+    if phys_dim and len(phys_vals) < phys_dim:
+        phys_vals.extend([0.0] * (phys_dim - len(phys_vals)))
+    if phys_dim and len(phys_vals) > phys_dim:
+        phys_vals = phys_vals[:phys_dim]
+
     av_features = np.array(av_vals, dtype=np.float32)
-    phys_features = np.array(base_phys_vals, dtype=np.float32)
+    phys_features = np.array(phys_vals, dtype=np.float32)
 
     if scaler is not None:
         try:
             av_features = scaler["av"].transform([av_features])[0].astype(np.float32, copy=False)
             phys_features = scaler["phys"].transform([phys_features])[0].astype(np.float32, copy=False)
         except ValueError as exc:
-            shape_key = (int(av_dim or -1), str(exc))
+            shape_key = (int(av_dim or -1), int(phys_dim or -1), str(exc))
             if shape_key not in _scaler_shape_warned:
                 warnings.warn(f"Skipping scaler due to shape mismatch: {exc}")
                 _scaler_shape_warned.add(shape_key)
@@ -170,6 +197,10 @@ def _load_audio_segment(video_path, offset, duration):
     except Exception as exc:  # noqa: BLE001
         warnings.warn(f"Audio load failed for embeddings: {exc}")
         return np.array([], dtype=np.float32), 16000
+
+
+def _ordered_feature_values(feature_map, ordered_cols):
+    return [float(feature_map.get(c, 0.0)) for c in ordered_cols]
 
 
 def run_cfn_on_video(
@@ -222,11 +253,21 @@ def run_cfn_on_video(
             chunk_start += current_chunk
             continue
 
-        av_mismatch = compute_av_mismatch(frames)
+        sync_main = compute_av_sync_signals(frames, window=5)
+        sync_w3 = compute_av_sync_signals(frames, window=3)
+        sync_w6 = compute_av_sync_signals(frames, window=6)
+        sync_w12 = compute_av_sync_signals(frames, window=12)
+        av_mismatch = sync_main["mismatch"]
+
+        ts = np.array([f.get("timestamp", 0.0) for f in frames], dtype=np.float32)
+        if len(ts) >= 2:
+            dt = float(np.median(np.diff(ts)))
+            effective_fps = 1.0 / max(dt, 1e-6)
+        else:
+            effective_fps = float(target_fps or fps or 30.0)
 
         visual_embedding_scalar = 0.0
         audio_embedding_scalar = 0.0
-        av_corr = 1 - np.array(av_mismatch, dtype=np.float32)
         if use_emb:
             lip_signal = np.array([f["lip_aperture"] for f in frames], dtype=np.float32)
             visual_embedding = feature_extractor.get_visual_embeddings(lip_signal)
@@ -238,25 +279,55 @@ def run_cfn_on_video(
                 audio_embedding_scalar = float(np.mean(audio_embedding)) if audio_embedding.size else 0.0
 
         for i, frame in enumerate(frames):
-            # Full candidate AV feature vector; per-model prep handles truncation/padding.
-            base_av_vals = [
-                float(frame["lip_aperture"]),
-                float(av_mismatch[i]),
-                float(av_corr[i]),
-                float(visual_embedding_scalar if use_emb else 0.0),
-                float(audio_embedding_scalar if use_emb else 0.0),
-            ]
+            # Build richer AV/physical feature maps; model-specific prep truncates/pads as needed.
+            av_map = {
+                "lip_variance": abs(float(frame.get("lip_velocity", frame.get("lip_aperture", 0.0)))),
+                "av_correlation": float(sync_main["local_corr"][i]),
+                "av_lag_frames": float(sync_main["local_lag"][i]),
+                "lip_mean": float(frame.get("lip_aperture", 0.0)),
+                "lip_std": abs(float(frame.get("lip_velocity", 0.0))),
+                "lip_range": abs(float(frame.get("lip_velocity", 0.0))),
+                "lip_velocity_mean": float(frame.get("lip_velocity", 0.0)),
+                "lip_velocity_std": abs(float(frame.get("lip_velocity", 0.0))),
+                "audio_rms_mean": float(frame.get("audio_rms", 0.0)),
+                "audio_rms_std": abs(float(frame.get("audio_delta", 0.0))),
+                "av_corr_05_mean": float(sync_w3["local_corr"][i]),
+                "av_corr_05_std": float(sync_w3["local_corr_std"][i]),
+                "av_corr_10_mean": float(sync_w6["local_corr"][i]),
+                "av_corr_10_std": float(sync_w6["local_corr_std"][i]),
+                "av_corr_20_mean": float(sync_w12["local_corr"][i]),
+                "av_corr_20_std": float(sync_w12["local_corr_std"][i]),
+                "av_peak_corr": float(sync_main["peak_corr"][i]),
+                "av_peak_lag_sec": float(sync_main["local_lag"][i]) / max(float(effective_fps), 1e-6),
+                "av_peak_prominence": float(sync_main["peak_prominence"][i]),
+                "av_onset_corr": float(sync_main["onset_corr"][i]),
+                "tcn_visual_emb": float(visual_embedding_scalar if use_emb else 0.0),
+                "wav2vec_audio_emb": float(audio_embedding_scalar if use_emb else 0.0),
+            }
 
-            base_phys_vals = [
-                frame.get("jitter", 0.0),
-                frame.get("jitter_std", 0.0)
-            ]
+            phys_map = {
+                "jitter_mean": float(frame.get("jitter", 0.0)),
+                "jitter_std": float(frame.get("jitter_std", 0.0)),
+                "mouth_flow_mean": float(frame.get("mouth_motion", frame.get("mouth_area_delta", 0.0))),
+                "mouth_flow_std": float(frame.get("mouth_motion_std", frame.get("mouth_area_delta", 0.0))),
+                "mouth_aspect_mean": float(frame.get("mouth_aspect", 0.0)),
+                "mouth_aspect_std": float(frame.get("mouth_aspect_delta", 0.0)),
+                "mouth_area_mean": float(frame.get("mouth_area_norm", 0.0)),
+                "mouth_area_std": float(frame.get("mouth_area_delta", 0.0)),
+                "mouth_area_delta_std": float(frame.get("mouth_area_delta", 0.0)),
+                "mouth_asym_mean": float(frame.get("mouth_asym", 0.0)),
+                "mouth_asym_std": float(frame.get("mouth_asym_delta", 0.0)),
+                "det_count": 1.0,
+            }
+
+            base_av_vals = _ordered_feature_values(av_map, _AV_FEATURE_ORDER)
+            base_phys_vals = _ordered_feature_values(phys_map, _PHYS_FEATURE_ORDER)
 
             probs = []
             with torch.no_grad():
-                for model, scaler, av_dim in zip(_models, _scalers, _AV_DIMS):
+                for model, scaler, av_dim, phys_dim in zip(_models, _scalers, _AV_DIMS, _PHYS_DIMS):
                     av_features, phys_features = _prepare_features_for_model(
-                        base_av_vals, base_phys_vals, av_dim, scaler
+                        base_av_vals, base_phys_vals, av_dim, phys_dim, scaler
                     )
                     X_av = torch.tensor(av_features).unsqueeze(0).to(DEVICE)
                     X_phys = torch.tensor(phys_features).unsqueeze(0).to(DEVICE)

@@ -1,0 +1,80 @@
+{
+  "rows": [
+    {
+      "name": "A_baseline",
+      "path": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/mixed_sweep_results_v2_constrained.json",
+      "overall_bal_acc": 0.6407942238267148,
+      "overall_f1": 0.6774716369529983,
+      "dfdc_bal_acc": 0.551948051948052,
+      "dfdc_f1": 0.5964912280701754,
+      "fakeav_bal_acc": 0.675,
+      "prob": 0.7,
+      "ratio": 0.62,
+      "causal": 0.72,
+      "require_flag": false,
+      "recommend_env": {
+        "CFN_PROB_THRESH": "0.7000",
+        "CFN_RATIO_THRESH": "0.6200",
+        "CFN_CAUSAL_THRESH": "0.7200",
+        "CFN_REQUIRE_FLAG": "false"
+      }
+    },
+    {
+      "name": "B_hardneg",
+      "path": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/mixed_sweep_results_v3.json",
+      "overall_bal_acc": 0.6407942238267148,
+      "overall_f1": 0.6774716369529983,
+      "dfdc_bal_acc": 0.551948051948052,
+      "dfdc_f1": 0.5964912280701754,
+      "fakeav_bal_acc": 0.675,
+      "prob": 0.7,
+      "ratio": 0.62,
+      "causal": 0.72,
+      "require_flag": false,
+      "recommend_env": {
+        "CFN_PROB_THRESH": "0.7000",
+        "CFN_RATIO_THRESH": "0.6200",
+        "CFN_CAUSAL_THRESH": "0.7200",
+        "CFN_REQUIRE_FLAG": "false"
+      }
+    },
+    {
+      "name": "C_dfdc_boost",
+      "path": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/mixed_sweep_results_v4_dfdc_boost.json",
+      "overall_bal_acc": 0.6407942238267148,
+      "overall_f1": 0.6774716369529983,
+      "dfdc_bal_acc": 0.551948051948052,
+      "dfdc_f1": 0.5964912280701754,
+      "fakeav_bal_acc": 0.675,
+      "prob": 0.7,
+      "ratio": 0.62,
+      "causal": 0.72,
+      "require_flag": false,
+      "recommend_env": {
+        "CFN_PROB_THRESH": "0.7000",
+        "CFN_RATIO_THRESH": "0.6200",
+        "CFN_CAUSAL_THRESH": "0.7200",
+        "CFN_REQUIRE_FLAG": "false"
+      }
+    }
+  ],
+  "selected": {
+    "name": "A_baseline",
+    "path": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/mixed_sweep_results_v2_constrained.json",
+    "overall_bal_acc": 0.6407942238267148,
+    "overall_f1": 0.6774716369529983,
+    "dfdc_bal_acc": 0.551948051948052,
+    "dfdc_f1": 0.5964912280701754,
+    "fakeav_bal_acc": 0.675,
+    "prob": 0.7,
+    "ratio": 0.62,
+    "causal": 0.72,
+    "require_flag": false,
+    "recommend_env": {
+      "CFN_PROB_THRESH": "0.7000",
+      "CFN_RATIO_THRESH": "0.6200",
+      "CFN_CAUSAL_THRESH": "0.7200",
+      "CFN_REQUIRE_FLAG": "false"
+    }
+  }
+}
