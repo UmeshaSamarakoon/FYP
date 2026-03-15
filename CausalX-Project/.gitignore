@@ -1,0 +1,39 @@
+# CausalX-Project local ignores
+
+# Python env / caches
+backend/.venv/
+backend/.torch/
+backend/**/__pycache__/
+backend/.pytest_cache/
+backend/.mypy_cache/
+
+# Runtime/generated backend files
+backend/uploads/
+backend/data/results.db
+backend/eval_cache_*.json
+backend/eval_manifest*.tsv
+
+# Large model/checkpoint artifacts (any depth)
+backend/models/**/*.pth
+backend/models/**/*.pt
+backend/models/**/*.pkl
+backend/models/**/*.ckpt
+backend/models/**/*.bin
+backend/models/**/*.h5
+backend/models/**/*.onnx
+backend/models/**/*.joblib
+
+# Experiment raw training artifacts
+backend/models/experiment_logs/**/*.train.log
+backend/models/experiment_logs/**/hard_negatives/
+backend/models/experiment_logs/**/hard_positives/
+
+# Notebook checkpoints
+backend/notebooks/.ipynb_checkpoints/
+
+# Frontend build/cache artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env.local
+

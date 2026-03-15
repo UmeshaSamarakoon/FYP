@@ -1,0 +1,64 @@
+{
+  "created_at": "2026-03-14T10:52:14",
+  "split_seed": 42,
+  "num_seeds_input": 3,
+  "num_seeds_used": 3,
+  "num_folds_ensembled": 5,
+  "protocol": {
+    "threshold_source": "val_acc",
+    "threshold_priority": "accuracy",
+    "ensemble_top_k": 0,
+    "ensemble_rank_metric": "val_bal_acc",
+    "ensemble_weighting": "uniform"
+  },
+  "artifacts": {
+    "ensemble_fold_metrics_csv": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/experiment_logs/fakeav_mrdf5cv_step25_lipoff_multiseed_multiseed_20260314_105213/ensemble_fold_metrics.csv",
+    "ensemble_fold_metrics_json": "/Users/venturit/Documents/GitHub/FYP/CausalX-Project/backend/models/experiment_logs/fakeav_mrdf5cv_step25_lipoff_multiseed_multiseed_20260314_105213/ensemble_fold_metrics.json"
+  },
+  "cv_metrics": {
+    "test_acc": {
+      "mean": 0.773048872180451,
+      "std": 0.009779398842957428
+    },
+    "test_prec": {
+      "mean": 0.8079568923475845,
+      "std": 0.011987584955580532
+    },
+    "test_rec": {
+      "mean": 0.9157837234922681,
+      "std": 0.030756196162079724
+    },
+    "test_f1": {
+      "mean": 0.8580312684744996,
+      "std": 0.008653319976716324
+    },
+    "test_bal_acc": {
+      "mean": 0.6301847910218045,
+      "std": 0.022818539769467606
+    },
+    "test_auc": {
+      "mean": 0.8227706185601837,
+      "std": 0.020260698265187466
+    },
+    "test_f1_real": {
+      "mean": 0.42679477480061606,
+      "std": 0.052637216938748246
+    },
+    "test_f1_fake": {
+      "mean": 0.8580312684744996,
+      "std": 0.008653319976716324
+    },
+    "test_auc_manip_audio_only": {
+      "mean": 0.8738587878787879,
+      "std": 0.027780139010018953
+    },
+    "test_auc_manip_video_only": {
+      "mean": 0.6528274747474748,
+      "std": 0.034856807335303185
+    },
+    "test_auc_manip_both_fake": {
+      "mean": 0.9416692929292928,
+      "std": 0.014226094465396823
+    }
+  }
+}
