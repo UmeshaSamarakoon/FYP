@@ -16,6 +16,26 @@ Embedding-aware training:
 Threshold tuning (short-term fix only) is controlled by environment variables. Copy
 `backend/.env.example` and override `CFN_PROB_THRESH` / `CFN_RATIO_THRESH` as needed.
 
+## FakeAVCeleb audio-bias mitigation (explicit preprocessing step)
+Before feature extraction, trim the first 100ms from the audio track of all FakeAVCeleb videos.
+This removes a known silence-shortcut bias at clip start.
+
+In-place trim command:
+
+```
+python scripts/trim_fakeav_audio_head.py \
+  --input-root data/raw/fakeavceleb \
+  --in-place \
+  --trim-seconds 0.10 \
+  --manifest-csv data/processed/fakeav_audio_trim_manifest.csv
+```
+
+Pipeline shortcut:
+
+```
+TRIM_FAKEAV_AUDIO_HEAD=true ./scripts/run_training_pipeline.sh
+```
+
 ## Retraining the CFN model (recommended for higher accuracy)
 
 The inference pipeline uses a pretrained model from `backend/models/cfn.pth`. For better accuracy on your dataset, retrain using the feature CSV produced by the preprocessing scripts.

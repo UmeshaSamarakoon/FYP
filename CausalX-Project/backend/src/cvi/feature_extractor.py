@@ -1,7 +1,11 @@
 import os
 import numpy as np
 
-from src.modules.embeddings import visual_tcn_embedding, wav2vec_embedding
+from src.modules.embeddings import (
+    efficientnet_b4_embedding,
+    visual_tcn_embedding,
+    wav2vec_embedding,
+)
 
 
 class FeatureExtractor:
@@ -13,9 +17,18 @@ class FeatureExtractor:
     def __init__(self):
         self.visual_ckpt = os.getenv("CFN_VISUAL_TCN_PATH")
         self.wav2vec_model = os.getenv("CFN_W2V2_MODEL", "WAV2VEC2_BASE")
+        self.wav2vec_ckpt = os.getenv("CFN_W2V2_FINETUNED_PATH", "").strip() or None
 
     def get_visual_embeddings(self, lip_signal: np.ndarray):
         return visual_tcn_embedding(lip_signal, checkpoint=self.visual_ckpt)
 
     def get_audio_embeddings(self, waveform: np.ndarray, sr: int):
-        return wav2vec_embedding(waveform, sr, model_name=self.wav2vec_model)
+        return wav2vec_embedding(
+            waveform,
+            sr,
+            model_name=self.wav2vec_model,
+            checkpoint_path=self.wav2vec_ckpt,
+        )
+
+    def get_efficientnet_embeddings(self, frames: list[np.ndarray]):
+        return efficientnet_b4_embedding(frames)

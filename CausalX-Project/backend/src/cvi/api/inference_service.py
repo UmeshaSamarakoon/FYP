@@ -16,7 +16,7 @@ def _safe_float(value, default):
     except (TypeError, ValueError):
         return default
 
-PROB_THRESH = float(os.getenv("CFN_PROB_THRESH", "0.80"))
+PROB_THRESH = float(os.getenv("CFN_PROB_THRESH", "0.247707"))
 RATIO_THRESH = float(os.getenv("CFN_RATIO_THRESH", "0.60"))
 SMOOTH_WINDOW = int(os.getenv("CFN_SMOOTH_WINDOW", "5"))
 CHUNK_SECONDS = int(os.getenv("CFN_CHUNK_SECONDS", "10"))
@@ -34,6 +34,13 @@ INCLUDE_BBOXES = os.getenv("CFN_INCLUDE_BBOXES", "true").lower() == "true"
 REQUIRE_FLAG = os.getenv("CFN_REQUIRE_FLAG", "false").lower() == "true"
 VIDEO_CALIBRATOR_PATH = os.getenv("CFN_VIDEO_CALIBRATOR_PATH", "").strip() or None
 CALIBRATOR_THRESH = float(os.getenv("CFN_CALIBRATOR_THRESH", "0.50"))
+# Optional frame-level calibration / source-free test-time adaptation (handled in cfn_frame_inference).
+TEMP_SCALE = float(os.getenv("CFN_TEMP_SCALE", "1.0"))
+TEMP_SCALE_PATH = os.getenv("CFN_TEMP_SCALE_PATH", "").strip() or None
+T2A_ENABLE = os.getenv("CFN_T2A_ENABLE", "false").lower() == "true"
+T2A_TARGET_ENTROPY = float(os.getenv("CFN_T2A_TARGET_ENTROPY", "0.58"))
+T2A_MAX_TEMP = float(os.getenv("CFN_T2A_MAX_TEMP", "2.5"))
+T2A_MIN_FRAMES = int(os.getenv("CFN_T2A_MIN_FRAMES", "24"))
 
 def build_inference_controller() -> InferenceController:
     engine = CausalInferenceEngine(

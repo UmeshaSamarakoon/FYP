@@ -36,6 +36,7 @@ try:
 except Exception as exc:  # noqa: BLE001
     warnings.warn(f"FaceMesh init failed; frame-level features disabled: {exc}")
     FACE_MESH = None
+_FACE_MESH_FALLBACK_WARNED = False
 
 LIP_TOP, LIP_BOTTOM = 13, 14
 LIP_IDX = list(range(0, 468))
@@ -70,6 +71,167 @@ def get_video_meta(video_path):
     duration = frame_count / fps if fps > 0 else 0.0
     fps = fps if fps > 0 else 30.0  # fallback to a sane default
     return fps, duration
+
+
+def _load_audio_with_ffmpeg_fallback(path, offset, duration):
+    try:
+        return librosa.load(path, sr=None, offset=offset, duration=duration)
+    except Exception as e:
+        warnings.warn(f"Primary audio load failed ({e}); trying ffmpeg wav fallback")
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp:
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                path,
+                "-vn",
+                "-acodec",
+                "pcm_s16le",
+                "-ar",
+                "16000",
+                "-ac",
+                "1",
+                tmp.name,
+            ]
+            try:
+                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return librosa.load(tmp.name, sr=None, offset=offset, duration=duration)
+            except Exception as e2:
+                raise RuntimeError(f"Audio extraction failed for {path}: {e2}") from e
+
+
+def _extract_frame_level_features_without_facemesh(
+    video_path,
+    start_time=0.0,
+    duration=None,
+    fps=None,
+    target_fps=None,
+    include_frame=True,
+    include_landmarks=True,
+):
+    global _FACE_MESH_FALLBACK_WARNED
+    if not _FACE_MESH_FALLBACK_WARNED:
+        warnings.warn(
+            "FaceMesh unavailable; using frame-level fallback proxies "
+            "(mouth/jitter cues from central ROI + audio RMS)."
+        )
+        _FACE_MESH_FALLBACK_WARNED = True
+
+    cap = cv2.VideoCapture(video_path)
+    if fps is None:
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    fps = float(fps if fps and fps > 0 else 30.0)
+
+    stride = 1
+    if target_fps is not None:
+        try:
+            target_fps = float(target_fps)
+            if target_fps > 0 and target_fps < fps:
+                stride = max(1, int(round(fps / target_fps)))
+        except (TypeError, ValueError):
+            stride = 1
+
+    if start_time > 0:
+        cap.set(cv2.CAP_PROP_POS_MSEC, start_time * 1000)
+
+    y, sr = _load_audio_with_ffmpeg_fallback(
+        video_path,
+        offset=start_time,
+        duration=duration,
+    )
+    if y is None or len(y) == 0:
+        audio_rms = np.zeros(1, dtype=np.float32)
+        audio_times = np.array([float(start_time)], dtype=np.float32)
+    else:
+        audio_rms = librosa.feature.rms(y=y)[0]
+        audio_times = librosa.frames_to_time(
+            np.arange(len(audio_rms)),
+            sr=sr,
+        ) + start_time
+
+    frames = []
+    prev_gray = None
+    prev_lip = None
+    prev_audio = None
+    prev_mouth_area = None
+    prev_mouth_asym = None
+    jitter_history = []
+    mouth_motion_history = []
+    frame_idx = int(start_time * fps)
+    end_time = start_time + duration if duration is not None else None
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        t = frame_idx / fps
+        if end_time is not None and t >= end_time:
+            break
+
+        if stride > 1 and ((frame_idx - int(start_time * fps)) % stride != 0):
+            frame_idx += 1
+            continue
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        h, w = gray.shape[:2]
+        y1, y2 = int(0.55 * h), int(0.90 * h)
+        x1, x2 = int(0.30 * w), int(0.70 * w)
+        roi = gray[y1:y2, x1:x2]
+        if roi.size == 0:
+            roi = gray
+
+        lip_aperture = float(np.mean(roi) / 255.0)
+        mouth_area_norm = float(np.std(roi) / 255.0)
+
+        audio_val = float(np.interp(t, audio_times, audio_rms))
+        lip_velocity = float(lip_aperture - prev_lip) if prev_lip is not None else 0.0
+        audio_delta = float(audio_val - prev_audio) if prev_audio is not None else 0.0
+        mouth_area_delta = float(mouth_area_norm - prev_mouth_area) if prev_mouth_area is not None else 0.0
+        mouth_asym = 0.0
+        mouth_asym_delta = float(mouth_asym - prev_mouth_asym) if prev_mouth_asym is not None else 0.0
+
+        jitter = 0.0
+        if prev_gray is not None and prev_gray.shape == gray.shape:
+            jitter = float(np.mean(np.abs(gray.astype(np.float32) - prev_gray.astype(np.float32))) / 255.0)
+
+        jitter_history.append(jitter)
+        jitter_std = float(np.std(jitter_history[-5:])) if len(jitter_history) >= 2 else 0.0
+        mouth_motion = 0.6 * abs(lip_velocity) + 0.4 * mouth_area_delta
+        mouth_motion_history.append(mouth_motion)
+        mouth_motion_std = float(np.std(mouth_motion_history[-5:])) if len(mouth_motion_history) >= 2 else 0.0
+
+        prev_gray = gray
+        prev_lip = float(lip_aperture)
+        prev_audio = float(audio_val)
+        prev_mouth_area = float(mouth_area_norm)
+        prev_mouth_asym = float(mouth_asym)
+
+        frames.append(
+            {
+                "timestamp": t,
+                "lip_aperture": lip_aperture,
+                "audio_rms": audio_val,
+                "landmarks": None if include_landmarks else None,
+                "frame": frame if include_frame else None,
+                "jitter": jitter,
+                "jitter_std": jitter_std,
+                "lip_velocity": lip_velocity,
+                "audio_delta": audio_delta,
+                "mouth_aspect": lip_aperture,
+                "mouth_area_norm": mouth_area_norm,
+                "mouth_area_delta": mouth_area_delta,
+                "mouth_asym": mouth_asym,
+                "mouth_asym_delta": mouth_asym_delta,
+                "mouth_motion": mouth_motion,
+                "mouth_motion_std": mouth_motion_std,
+            }
+        )
+
+        frame_idx += 1
+
+    cap.release()
+    return frames
 
 
 def _safe_corr(a, b):
@@ -107,7 +269,15 @@ def extract_frame_level_features(
     include_landmarks=True,
 ):
     if FACE_MESH is None:
-        return []
+        return _extract_frame_level_features_without_facemesh(
+            video_path,
+            start_time=start_time,
+            duration=duration,
+            fps=fps,
+            target_fps=target_fps,
+            include_frame=include_frame,
+            include_landmarks=include_landmarks,
+        )
 
     cap = cv2.VideoCapture(video_path)
     if fps is None:
@@ -126,34 +296,7 @@ def extract_frame_level_features(
     if start_time > 0:
         cap.set(cv2.CAP_PROP_POS_MSEC, start_time * 1000)
 
-    # Limit audio read to the current chunk, with an ffmpeg fallback for mp4
-    def _load_audio(path, offset, duration):
-        try:
-            return librosa.load(path, sr=None, offset=offset, duration=duration)
-        except Exception as e:
-            warnings.warn(f"Primary audio load failed ({e}); trying ffmpeg wav fallback")
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp:
-                cmd = [
-                    "ffmpeg",
-                    "-y",
-                    "-i",
-                    path,
-                    "-vn",
-                    "-acodec",
-                    "pcm_s16le",
-                    "-ar",
-                    "16000",
-                    "-ac",
-                    "1",
-                    tmp.name,
-                ]
-                try:
-                    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    return librosa.load(tmp.name, sr=None, offset=offset, duration=duration)
-                except Exception as e2:
-                    raise RuntimeError(f"Audio extraction failed for {path}: {e2}") from e
-
-    y, sr = _load_audio(
+    y, sr = _load_audio_with_ffmpeg_fallback(
         video_path,
         offset=start_time,
         duration=duration
