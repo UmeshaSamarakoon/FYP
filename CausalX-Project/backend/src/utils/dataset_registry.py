@@ -2,6 +2,33 @@
 
 import os
 import json
+from pathlib import Path
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def get_default_fakeav_root() -> str:
+    return str((_PROJECT_ROOT / "data/raw/fakeavceleb").resolve())
+
+
+def get_default_dfdc_root() -> str:
+    return str((_PROJECT_ROOT / "data/raw/dfdc").resolve())
+
+
+def get_default_celebdf_root() -> str:
+    return str((_PROJECT_ROOT / "data/raw/celebdfv2").resolve())
+
+
+def get_dataset_roots() -> dict[str, str]:
+    return {
+        "fakeav": get_default_fakeav_root(),
+        "dfdc": get_default_dfdc_root(),
+        "celebdf": get_default_celebdf_root(),
+    }
+
+
+def get_default_drive_splits_root() -> str:
+    return str((_PROJECT_ROOT / "data/splits").resolve())
 
 # ------------------------------------------------------------------
 # FakeAV-Celeb (Causal Intervention Dataset)
@@ -13,6 +40,7 @@ FAKEAV_LABEL_MAP = {
     "FakeVideo-RealAudio": (1, 1, 0),
     "RealVideo-FakeAudio": (1, 0, 1)
 }
+
 
 def get_fakeavceleb_videos(root_dir):
     videos = []

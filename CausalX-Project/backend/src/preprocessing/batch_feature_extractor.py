@@ -3,6 +3,8 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ.setdefault("MEDIAPIPE_DISABLE_GPU", "1")
 import sys
+import subprocess
+import tempfile
 import cv2
 import numpy as np
 import pandas as pd
@@ -34,6 +36,8 @@ except Exception:  # noqa: BLE001
     FACE_CASCADE = None
 
 _FALLBACK_WARNED = False
+_STRICT_FACE_MESH = os.getenv("CFN_REQUIRE_FACE_MESH", "false").lower() == "true"
+_FFMPEG_MISSING_WARNED = False
 
 # --- 1. PROJECT PATH SETUP ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -41,6 +45,8 @@ project_root = os.path.abspath(os.path.join(current_dir, "../../"))
 sys.path.append(project_root)
 
 from src.utils.dataset_registry import (
+    get_default_dfdc_root,
+    get_default_fakeav_root,
     get_dfdc_videos,
     get_fakeavceleb_videos
 )
@@ -53,6 +59,7 @@ OUTPUT_CSV = os.path.join(
     "processed",
     "causal_multimodal_dataset.csv"
 )
+OUTPUT_CSV = os.getenv("CAUSAL_OUTPUT_CSV", OUTPUT_CSV)
 
 # --- 3. CONSTANTS ---
 RIGID_ZONE = [1, 2, 4, 5, 6, 8, 9, 10, 151, 67, 103, 109, 332, 338, 297]
@@ -180,6 +187,109 @@ def detect_face_bbox_haar(gray_frame):
     x, y, w, h = max(boxes, key=lambda b: b[2] * b[3])
     return int(x), int(y), int(w), int(h)
 
+
+def _audio_stats_from_waveform(y, sr, hop_length=512):
+    """Compute shared audio stats used by both primary and fallback extractors."""
+    y = np.asarray(y, dtype=np.float32)
+    if y.size == 0:
+        return None
+    try:
+        audio_rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
+        if audio_rms.size == 0:
+            return None
+        audio_times = librosa.frames_to_time(
+            np.arange(len(audio_rms)),
+            sr=sr,
+            hop_length=hop_length,
+        )
+        onset_strength = librosa.onset.onset_strength(y=y, sr=sr)
+        if onset_strength is None or len(onset_strength) == 0:
+            onset_strength = np.zeros_like(audio_rms, dtype=np.float32)
+            onset_times = audio_times
+        else:
+            onset_strength = np.asarray(onset_strength, dtype=np.float32)
+            onset_times = librosa.frames_to_time(np.arange(len(onset_strength)), sr=sr)
+    except Exception:
+        return None
+
+    return {
+        "waveform": y,
+        "sr": int(sr),
+        "audio_rms": np.asarray(audio_rms, dtype=np.float32),
+        "audio_times": np.asarray(audio_times, dtype=np.float32),
+        "onset_strength": np.asarray(onset_strength, dtype=np.float32),
+        "onset_times": np.asarray(onset_times, dtype=np.float32),
+    }
+
+
+def _load_audio_with_ffmpeg(video_path, duration_s=10.0, target_sr=16000):
+    """Decode audio via ffmpeg when direct container decode fails."""
+    global _FFMPEG_MISSING_WARNED  # noqa: PLW0603
+    ffmpeg_bin = os.getenv("CFN_FFMPEG_BIN", "ffmpeg")
+    tmp_wav = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp_wav = tmp.name
+        cmd = [
+            ffmpeg_bin,
+            "-nostdin",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(video_path),
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            str(int(target_sr)),
+            "-t",
+            f"{float(duration_s):.3f}",
+            tmp_wav,
+        ]
+        proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
+        if proc.returncode != 0:
+            return None
+        if not os.path.exists(tmp_wav) or os.path.getsize(tmp_wav) <= 0:
+            return None
+        y, sr = librosa.load(tmp_wav, sr=None, mono=True, duration=float(duration_s))
+        if y is None or len(y) == 0:
+            return None
+        return np.asarray(y, dtype=np.float32), int(sr)
+    except FileNotFoundError:
+        if not _FFMPEG_MISSING_WARNED:
+            warnings.warn(
+                "ffmpeg binary not found; audio decode fallback is unavailable.",
+                RuntimeWarning,
+            )
+            _FFMPEG_MISSING_WARNED = True
+        return None
+    except Exception:
+        return None
+    finally:
+        if tmp_wav and os.path.exists(tmp_wav):
+            try:
+                os.remove(tmp_wav)
+            except Exception:
+                pass
+
+
+def _load_audio_features(video_path, duration_s=10.0):
+    """Load audio robustly, trying direct decode first then ffmpeg fallback."""
+    try:
+        y, sr = librosa.load(video_path, sr=None, duration=float(duration_s))
+        stats = _audio_stats_from_waveform(y, sr)
+        if stats is not None:
+            return stats
+    except Exception:
+        pass
+
+    decoded = _load_audio_with_ffmpeg(video_path, duration_s=duration_s)
+    if decoded is None:
+        return None
+    y, sr = decoded
+    return _audio_stats_from_waveform(y, sr)
+
 # --- 5. FEATURE EXTRACTION ---
 
 def _safe_float(value, fallback=0.0):
@@ -187,6 +297,50 @@ def _safe_float(value, fallback=0.0):
         return float(value)
     except (TypeError, ValueError):
         return fallback
+
+
+def _derive_video_artifact_proxies(
+    jitter_std: float,
+    lip_velocity_std: float,
+    mouth_flow_mean: float,
+    mouth_flow_std: float,
+    mouth_area_std: float,
+    mouth_area_delta_std: float,
+    mouth_asym_std: float,
+    det_count: float,
+    av_peak_prominence: float,
+    av_peak_corr: float,
+) -> dict[str, float]:
+    """Derive lightweight artifact proxies used by the extended physical feature profile."""
+    j_std = abs(_safe_float(jitter_std, 0.0))
+    lv_std = abs(_safe_float(lip_velocity_std, 0.0))
+    mf_mean = abs(_safe_float(mouth_flow_mean, 0.0))
+    mf_std = abs(_safe_float(mouth_flow_std, 0.0))
+    ma_std = abs(_safe_float(mouth_area_std, 0.0))
+    mad_std = abs(_safe_float(mouth_area_delta_std, 0.0))
+    mas_std = abs(_safe_float(mouth_asym_std, 0.0))
+    det = max(_safe_float(det_count, 0.0), 0.0)
+    peak_prom = max(_safe_float(av_peak_prominence, 0.0), 0.0)
+    peak_corr = _safe_float(av_peak_corr, 0.0)
+
+    motion_noise_ratio = mf_std / (mf_mean + 1e-4)
+    shape_noise_ratio = (mad_std / (ma_std + 1e-4)) + mas_std
+    temporal_instability = (0.5 * j_std) + (0.3 * lv_std) + (0.2 * mf_std)
+    detection_dropout = 1.0 / (1.0 + det)
+    sync_gap = 1.0 - float(np.clip((peak_corr + 1.0) * 0.5, 0.0, 1.0))
+    compression_proxy = (
+        0.45 * (1.0 / (1.0 + peak_prom))
+        + 0.35 * sync_gap
+        + 0.20 * (motion_noise_ratio / (1.0 + motion_noise_ratio))
+    )
+
+    return {
+        "video_motion_noise_ratio": float(motion_noise_ratio),
+        "video_shape_noise_ratio": float(shape_noise_ratio),
+        "video_temporal_instability": float(temporal_instability),
+        "video_detection_dropout": float(np.clip(detection_dropout, 0.0, 1.0)),
+        "video_compression_proxy": float(np.clip(compression_proxy, 0.0, 1.0)),
+    }
 
 
 def windowed_corr_stats(lips, audio, times, window_s=1.0):
@@ -218,18 +372,19 @@ def windowed_corr_stats(lips, audio, times, window_s=1.0):
 
 def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
     if FACE_MESH is None:
+        if _STRICT_FACE_MESH:
+            return None
         return extract_causal_features_fallback(video_path, clahe_val=clahe_val)
     # AUDIO
-    try:
-        y, sr = librosa.load(video_path, sr=None, duration=10.0)
-        audio_rms = librosa.feature.rms(y=y, hop_length=512)[0]
-        audio_times = librosa.frames_to_time(
-            np.arange(len(audio_rms)), sr=sr, hop_length=512
-        )
-        spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
-        onset_strength = librosa.onset.onset_strength(y=y, sr=sr)
-    except Exception:
+    audio = _load_audio_features(video_path, duration_s=10.0)
+    if audio is None:
         return None
+    y = audio["waveform"]
+    sr = int(audio["sr"])
+    audio_rms = audio["audio_rms"]
+    audio_times = audio["audio_times"]
+    onset_strength = audio["onset_strength"]
+    onset_times = audio["onset_times"]
 
     # VIDEO
     cap = cv2.VideoCapture(video_path)
@@ -241,6 +396,8 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
     mouth_area_deltas = []
     mouth_asymmetries = []
     mouth_flow_mags = []
+    effnet_face_crops = []
+    effnet_mouth_crops = []
     prev_mouth_gray = None
     prev_mouth_area = None
     prev_rigid = None
@@ -271,6 +428,20 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
         if results.multi_face_landmarks:
             raw = np.array([[lm.x, lm.y] for lm in results.multi_face_landmarks[0].landmark])
             aligned = align_landmarks_full(raw)
+
+            # Sample a small number of face crops for EfficientNet-B4 embedding.
+            if frame_idx % 6 == 0 and len(effnet_face_crops) < 12:
+                h, w = frame.shape[:2]
+                fx = np.clip(raw[:, 0] * w, 0, w - 1)
+                fy = np.clip(raw[:, 1] * h, 0, h - 1)
+                x1 = int(np.min(fx))
+                y1 = int(np.min(fy))
+                x2 = int(np.max(fx))
+                y2 = int(np.max(fy))
+                if x2 > x1 and y2 > y1:
+                    face_crop = frame[y1:y2, x1:x2]
+                    if face_crop.size > 0:
+                        effnet_face_crops.append(face_crop)
 
             lips.append(np.linalg.norm(aligned[LIP_TOP] - aligned[LIP_BOTTOM]))
             if len(aligned) > max(MOUTH_LEFT, MOUTH_RIGHT):
@@ -312,6 +483,8 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
                 x1, y1, x2, y2 = roi
                 mouth = frame[y1:y2, x1:x2]
                 if mouth.size > 0:
+                    if frame_idx % 6 == 0 and len(effnet_mouth_crops) < 12:
+                        effnet_mouth_crops.append(mouth.copy())
                     mouth_gray = cv2.cvtColor(mouth, cv2.COLOR_BGR2GRAY)
                     if prev_mouth_gray is not None and mouth_gray.shape == prev_mouth_gray.shape:
                         flow = cv2.calcOpticalFlowFarneback(
@@ -351,7 +524,7 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
     lip_velocity = np.diff(nl)
     audio_onset_interp = np.interp(
         times,
-        librosa.frames_to_time(np.arange(len(onset_strength)), sr=sr),
+        onset_times,
         onset_strength
     )
     onset_corr = safe_corr(
@@ -362,6 +535,8 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
     feature_extractor = FeatureExtractor()
     visual_embedding_scalar = 0.0
     audio_embedding_scalar = 0.0
+    effnet_face_embedding_scalar = 0.0
+    lip_roi_embedding_scalar = 0.0
     if len(lips) > 0:
         try:
             visual_embedding = feature_extractor.get_visual_embeddings(
@@ -375,10 +550,49 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
         audio_embedding_scalar = _safe_float(np.mean(audio_embedding))
     except Exception:
         audio_embedding_scalar = 0.0
+    try:
+        if effnet_face_crops:
+            effnet_face_emb = feature_extractor.get_efficientnet_embeddings(effnet_face_crops)
+            effnet_face_embedding_scalar = _safe_float(np.mean(effnet_face_emb))
+    except Exception:
+        effnet_face_embedding_scalar = 0.0
+    try:
+        if effnet_mouth_crops:
+            lip_roi_emb = feature_extractor.get_efficientnet_embeddings(effnet_mouth_crops)
+            lip_roi_embedding_scalar = _safe_float(np.mean(lip_roi_emb))
+    except Exception:
+        lip_roi_embedding_scalar = 0.0
+
+    jitter_mean = float(np.mean(jitters)) if jitters else 0.0
+    jitter_std = float(np.std(jitters)) if jitters else 0.0
+    lip_velocity_mean = float(np.mean(lip_velocity)) if lip_velocity.size else 0.0
+    lip_velocity_std = float(np.std(lip_velocity)) if lip_velocity.size else 0.0
+    mouth_aspect_mean = float(np.mean(mouth_aspects)) if mouth_aspects else 0.0
+    mouth_aspect_std = float(np.std(mouth_aspects)) if mouth_aspects else 0.0
+    mouth_area_mean = float(np.mean(mouth_areas)) if mouth_areas else 0.0
+    mouth_area_std = float(np.std(mouth_areas)) if mouth_areas else 0.0
+    mouth_area_delta_std = float(np.std(mouth_area_deltas)) if mouth_area_deltas else 0.0
+    mouth_asym_mean = float(np.mean(mouth_asymmetries)) if mouth_asymmetries else 0.0
+    mouth_asym_std = float(np.std(mouth_asymmetries)) if mouth_asymmetries else 0.0
+    mouth_flow_mean = float(np.mean(mouth_flow_mags)) if mouth_flow_mags else 0.0
+    mouth_flow_std = float(np.std(mouth_flow_mags)) if mouth_flow_mags else 0.0
+    det_count = float(len(lips))
+    artifact = _derive_video_artifact_proxies(
+        jitter_std=jitter_std,
+        lip_velocity_std=lip_velocity_std,
+        mouth_flow_mean=mouth_flow_mean,
+        mouth_flow_std=mouth_flow_std,
+        mouth_area_std=mouth_area_std,
+        mouth_area_delta_std=mouth_area_delta_std,
+        mouth_asym_std=mouth_asym_std,
+        det_count=det_count,
+        av_peak_prominence=float(peak_prominence),
+        av_peak_corr=float(peak_corr),
+    )
 
     return {
-        "jitter_mean": np.mean(jitters) if jitters else 0.0,
-        "jitter_std": np.std(jitters) if jitters else 0.0,
+        "jitter_mean": jitter_mean,
+        "jitter_std": jitter_std,
         "av_correlation": corr,
         "av_lag_frames": lag,
         "av_peak_corr": peak_corr,
@@ -395,22 +609,26 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
         "lip_mean": float(np.mean(nl)),
         "lip_std": float(np.std(nl)),
         "lip_range": float(np.max(nl) - np.min(nl)),
-        "lip_velocity_mean": float(np.mean(lip_velocity)) if lip_velocity.size else 0.0,
-        "lip_velocity_std": float(np.std(lip_velocity)) if lip_velocity.size else 0.0,
+        "lip_velocity_mean": lip_velocity_mean,
+        "lip_velocity_std": lip_velocity_std,
         "audio_rms_mean": float(np.mean(na)),
         "audio_rms_std": float(np.std(na)),
-        "mouth_aspect_mean": float(np.mean(mouth_aspects)) if mouth_aspects else 0.0,
-        "mouth_aspect_std": float(np.std(mouth_aspects)) if mouth_aspects else 0.0,
-        "mouth_area_mean": float(np.mean(mouth_areas)) if mouth_areas else 0.0,
-        "mouth_area_std": float(np.std(mouth_areas)) if mouth_areas else 0.0,
-        "mouth_area_delta_std": float(np.std(mouth_area_deltas)) if mouth_area_deltas else 0.0,
-        "mouth_asym_mean": float(np.mean(mouth_asymmetries)) if mouth_asymmetries else 0.0,
-        "mouth_asym_std": float(np.std(mouth_asymmetries)) if mouth_asymmetries else 0.0,
-        "mouth_flow_mean": float(np.mean(mouth_flow_mags)) if mouth_flow_mags else 0.0,
-        "mouth_flow_std": float(np.std(mouth_flow_mags)) if mouth_flow_mags else 0.0,
+        "mouth_aspect_mean": mouth_aspect_mean,
+        "mouth_aspect_std": mouth_aspect_std,
+        "mouth_area_mean": mouth_area_mean,
+        "mouth_area_std": mouth_area_std,
+        "mouth_area_delta_std": mouth_area_delta_std,
+        "mouth_asym_mean": mouth_asym_mean,
+        "mouth_asym_std": mouth_asym_std,
+        "mouth_flow_mean": mouth_flow_mean,
+        "mouth_flow_std": mouth_flow_std,
+        **artifact,
         "tcn_visual_emb": visual_embedding_scalar,
         "wav2vec_audio_emb": audio_embedding_scalar,
-        "det_count": len(lips),
+        "effnet_b4_face_emb": effnet_face_embedding_scalar,
+        "lip_roi_emb": lip_roi_embedding_scalar,
+        "wav2vec2_base_ft_emb": audio_embedding_scalar,
+        "det_count": det_count,
     }
 
 
@@ -426,9 +644,16 @@ def extract_causal_features_fallback(video_path, clahe_val=3.0):
     if FACE_CASCADE is None:
         return None
 
-    # Audio decoding from MP4 is slow/unreliable on some local setups; keep fallback CPU-fast.
-    y = None
-    sr = 16000
+    # Keep fallback lightweight for CPU-only environments.
+    frame_stride = 4
+    max_seconds = 6.0
+    audio = _load_audio_features(video_path, duration_s=max_seconds)
+    y = audio["waveform"] if audio is not None else None
+    sr = int(audio["sr"]) if audio is not None else 16000
+    audio_rms = audio["audio_rms"] if audio is not None else None
+    audio_times = audio["audio_times"] if audio is not None else None
+    onset_strength = audio["onset_strength"] if audio is not None else None
+    onset_times = audio["onset_times"] if audio is not None else None
 
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -439,14 +664,12 @@ def extract_causal_features_fallback(video_path, clahe_val=3.0):
     mouth_aspects, mouth_areas = [], []
     mouth_area_deltas, mouth_asymmetries = [], []
     mouth_flow_mags = []
+    effnet_face_crops = []
+    effnet_mouth_crops = []
     prev_mouth_gray = None
     prev_mouth_area = None
     prev_center = None
     frame_idx = 0
-
-    # Keep fallback lightweight for CPU-only environments.
-    frame_stride = 4
-    max_seconds = 6.0
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -477,6 +700,13 @@ def extract_causal_features_fallback(video_path, clahe_val=3.0):
             )
 
         x, y0, w, h = bbox
+        if frame_idx % 6 == 0 and len(effnet_face_crops) < 12:
+            fx1 = max(0, int(x))
+            fy1 = max(0, int(y0))
+            fx2 = min(gray.shape[1], int(x + w))
+            fy2 = min(gray.shape[0], int(y0 + h))
+            if fx2 > fx1 and fy2 > fy1:
+                effnet_face_crops.append(frame[fy1:fy2, fx1:fx2].copy())
         x1 = max(0, int(x + 0.20 * w))
         x2 = min(gray.shape[1], int(x + 0.80 * w))
         y1 = max(0, int(y0 + 0.55 * h))
@@ -489,6 +719,8 @@ def extract_causal_features_fallback(video_path, clahe_val=3.0):
         if mouth_gray.size == 0:
             frame_idx += 1
             continue
+        if frame_idx % 6 == 0 and len(effnet_mouth_crops) < 12:
+            effnet_mouth_crops.append(frame[y1:y2, x1:x2].copy())
 
         mean_val = float(np.mean(mouth_gray))
         std_val = float(np.std(mouth_gray))
@@ -536,16 +768,39 @@ def extract_causal_features_fallback(video_path, clahe_val=3.0):
         return None
 
     nl = normalize(np.array(lips))
-    na = np.zeros_like(nl)
-    corr_05_mean, corr_05_std = 0.0, 0.0
-    corr_10_mean, corr_10_std = 0.0, 0.0
-    corr_20_mean, corr_20_std = 0.0, 0.0
-
-    corr = 0.0
-    peak_corr, lag, peak_prominence = 0.0, 0.0, 0.0
+    has_audio = (
+        audio_rms is not None
+        and audio_times is not None
+        and len(audio_rms) > 1
+        and len(audio_times) > 1
+        and len(times) > 1
+    )
+    if has_audio:
+        audio_sync = np.interp(times, audio_times, audio_rms)
+        na = normalize(audio_sync)
+        corr_05_mean, corr_05_std = windowed_corr_stats(nl, na, times, 0.5)
+        corr_10_mean, corr_10_std = windowed_corr_stats(nl, na, times, 1.0)
+        corr_20_mean, corr_20_std = windowed_corr_stats(nl, na, times, 2.0)
+        corr = safe_corr(nl, na)
+        peak_corr, lag, peak_prominence = xcorr_metrics(nl, na)
+        if onset_strength is not None and onset_times is not None and len(onset_strength) > 1:
+            audio_onset_interp = np.interp(times, onset_times, onset_strength)
+            onset_corr = safe_corr(
+                np.abs(np.diff(nl, prepend=nl[0])),
+                normalize(np.abs(audio_onset_interp)),
+            )
+        else:
+            onset_corr = 0.0
+    else:
+        na = np.zeros_like(nl)
+        corr_05_mean, corr_05_std = 0.0, 0.0
+        corr_10_mean, corr_10_std = 0.0, 0.0
+        corr_20_mean, corr_20_std = 0.0, 0.0
+        corr = 0.0
+        peak_corr, lag, peak_prominence = 0.0, 0.0, 0.0
+        onset_corr = 0.0
     lag_sec = float(lag / max(float(fps), 1e-6))
     lip_velocity = np.diff(nl)
-    onset_corr = 0.0
 
     feature_extractor = FeatureExtractor()
     try:
@@ -553,11 +808,59 @@ def extract_causal_features_fallback(video_path, clahe_val=3.0):
         visual_embedding_scalar = _safe_float(np.mean(visual_embedding))
     except Exception:
         visual_embedding_scalar = 0.0
-    audio_embedding_scalar = 0.0
+    try:
+        if y is not None and len(y) > 0:
+            audio_embedding = feature_extractor.get_audio_embeddings(y, sr)
+            audio_embedding_scalar = _safe_float(np.mean(audio_embedding))
+        else:
+            audio_embedding_scalar = 0.0
+    except Exception:
+        audio_embedding_scalar = 0.0
+    effnet_face_embedding_scalar = 0.0
+    lip_roi_embedding_scalar = 0.0
+    try:
+        if effnet_face_crops:
+            effnet_face_emb = feature_extractor.get_efficientnet_embeddings(effnet_face_crops)
+            effnet_face_embedding_scalar = _safe_float(np.mean(effnet_face_emb))
+    except Exception:
+        effnet_face_embedding_scalar = 0.0
+    try:
+        if effnet_mouth_crops:
+            lip_roi_emb = feature_extractor.get_efficientnet_embeddings(effnet_mouth_crops)
+            lip_roi_embedding_scalar = _safe_float(np.mean(lip_roi_emb))
+    except Exception:
+        lip_roi_embedding_scalar = 0.0
+
+    jitter_mean = float(np.mean(jitters)) if jitters else 0.0
+    jitter_std = float(np.std(jitters)) if jitters else 0.0
+    lip_velocity_mean = float(np.mean(lip_velocity)) if lip_velocity.size else 0.0
+    lip_velocity_std = float(np.std(lip_velocity)) if lip_velocity.size else 0.0
+    mouth_aspect_mean = float(np.mean(mouth_aspects)) if mouth_aspects else 0.0
+    mouth_aspect_std = float(np.std(mouth_aspects)) if mouth_aspects else 0.0
+    mouth_area_mean = float(np.mean(mouth_areas)) if mouth_areas else 0.0
+    mouth_area_std = float(np.std(mouth_areas)) if mouth_areas else 0.0
+    mouth_area_delta_std = float(np.std(mouth_area_deltas)) if mouth_area_deltas else 0.0
+    mouth_asym_mean = float(np.mean(mouth_asymmetries)) if mouth_asymmetries else 0.0
+    mouth_asym_std = float(np.std(mouth_asymmetries)) if mouth_asymmetries else 0.0
+    mouth_flow_mean = float(np.mean(mouth_flow_mags)) if mouth_flow_mags else 0.0
+    mouth_flow_std = float(np.std(mouth_flow_mags)) if mouth_flow_mags else 0.0
+    det_count = float(len(lips))
+    artifact = _derive_video_artifact_proxies(
+        jitter_std=jitter_std,
+        lip_velocity_std=lip_velocity_std,
+        mouth_flow_mean=mouth_flow_mean,
+        mouth_flow_std=mouth_flow_std,
+        mouth_area_std=mouth_area_std,
+        mouth_area_delta_std=mouth_area_delta_std,
+        mouth_asym_std=mouth_asym_std,
+        det_count=det_count,
+        av_peak_prominence=float(peak_prominence),
+        av_peak_corr=float(peak_corr),
+    )
 
     return {
-        "jitter_mean": np.mean(jitters) if jitters else 0.0,
-        "jitter_std": np.std(jitters) if jitters else 0.0,
+        "jitter_mean": jitter_mean,
+        "jitter_std": jitter_std,
         "av_correlation": corr,
         "av_lag_frames": lag,
         "av_peak_corr": peak_corr,
@@ -574,22 +877,26 @@ def extract_causal_features_fallback(video_path, clahe_val=3.0):
         "lip_mean": float(np.mean(nl)),
         "lip_std": float(np.std(nl)),
         "lip_range": float(np.max(nl) - np.min(nl)),
-        "lip_velocity_mean": float(np.mean(lip_velocity)) if lip_velocity.size else 0.0,
-        "lip_velocity_std": float(np.std(lip_velocity)) if lip_velocity.size else 0.0,
+        "lip_velocity_mean": lip_velocity_mean,
+        "lip_velocity_std": lip_velocity_std,
         "audio_rms_mean": float(np.mean(na)),
         "audio_rms_std": float(np.std(na)),
-        "mouth_aspect_mean": float(np.mean(mouth_aspects)) if mouth_aspects else 0.0,
-        "mouth_aspect_std": float(np.std(mouth_aspects)) if mouth_aspects else 0.0,
-        "mouth_area_mean": float(np.mean(mouth_areas)) if mouth_areas else 0.0,
-        "mouth_area_std": float(np.std(mouth_areas)) if mouth_areas else 0.0,
-        "mouth_area_delta_std": float(np.std(mouth_area_deltas)) if mouth_area_deltas else 0.0,
-        "mouth_asym_mean": float(np.mean(mouth_asymmetries)) if mouth_asymmetries else 0.0,
-        "mouth_asym_std": float(np.std(mouth_asymmetries)) if mouth_asymmetries else 0.0,
-        "mouth_flow_mean": float(np.mean(mouth_flow_mags)) if mouth_flow_mags else 0.0,
-        "mouth_flow_std": float(np.std(mouth_flow_mags)) if mouth_flow_mags else 0.0,
+        "mouth_aspect_mean": mouth_aspect_mean,
+        "mouth_aspect_std": mouth_aspect_std,
+        "mouth_area_mean": mouth_area_mean,
+        "mouth_area_std": mouth_area_std,
+        "mouth_area_delta_std": mouth_area_delta_std,
+        "mouth_asym_mean": mouth_asym_mean,
+        "mouth_asym_std": mouth_asym_std,
+        "mouth_flow_mean": mouth_flow_mean,
+        "mouth_flow_std": mouth_flow_std,
+        **artifact,
         "tcn_visual_emb": visual_embedding_scalar,
         "wav2vec_audio_emb": audio_embedding_scalar,
-        "det_count": len(lips),
+        "effnet_b4_face_emb": effnet_face_embedding_scalar,
+        "lip_roi_emb": lip_roi_embedding_scalar,
+        "wav2vec2_base_ft_emb": audio_embedding_scalar,
+        "det_count": det_count,
     }
 
 # --- 6. BATCH RUNNER ---
@@ -597,18 +904,25 @@ def extract_causal_features_fallback(video_path, clahe_val=3.0):
 def run_multimodal_batch():
     os.makedirs(os.path.dirname(OUTPUT_CSV), exist_ok=True)
 
+    if _STRICT_FACE_MESH and FACE_MESH is None:
+        raise RuntimeError(
+            "CFN_REQUIRE_FACE_MESH=true but FaceMesh failed to initialize. "
+            "Run extraction in an environment where MediaPipe FaceMesh is available."
+        )
+
+    dfdc_root = get_default_dfdc_root()
+    fakeav_root = get_default_fakeav_root()
+
     videos = []
-    videos.extend(get_dfdc_videos(
-        os.path.join(project_root, "data", "raw", "dfdc")
-    ))
-    videos.extend(get_fakeavceleb_videos(
-        os.path.join(project_root, "data", "raw", "fakeavceleb")
-    ))
+    videos.extend(get_dfdc_videos(dfdc_root))
+    videos.extend(get_fakeavceleb_videos(fakeav_root))
 
     processed = set()
     if os.path.exists(OUTPUT_CSV):
         processed = set(pd.read_csv(OUTPUT_CSV)["video_id"])
 
+    print(f"Using DFDC root: {dfdc_root}")
+    print(f"Using FakeAV root: {fakeav_root}")
     print(f"Found {len(videos)} total videos; already processed {len(processed)}.")
 
     for v in tqdm(videos, desc="Extracting causal features"):
