@@ -30,28 +30,16 @@ export function VideoAnalysis({ videoFile, result, confidence, confidenceLabel, 
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string>('');
-  const [fallbackVideoUrl, setFallbackVideoUrl] = useState<string>('');
-  const [usingFallbackSource, setUsingFallbackSource] = useState(false);
   const [naturalSize, setNaturalSize] = useState({ width: 16, height: 9 });
   const [videoError, setVideoError] = useState(false);
   const [isVideoReady, setIsVideoReady] = useState(false);
-  const activeVideoUrl = usingFallbackSource ? (fallbackVideoUrl || videoUrl) : videoUrl;
 
   useEffect(() => {
-    const primaryUrl = URL.createObjectURL(videoFile);
-    // Some files expose generic MIME types; a forced MP4-typed blob can improve browser sniffing.
-    const forceMp4Blob = new Blob([videoFile], { type: 'video/mp4' });
-    const mp4Url = URL.createObjectURL(forceMp4Blob);
-
-    setVideoUrl(primaryUrl);
-    setFallbackVideoUrl(mp4Url);
-    setUsingFallbackSource(false);
+    const url = URL.createObjectURL(videoFile);
+    setVideoUrl(url);
     setVideoError(false);
     setIsVideoReady(false);
-    return () => {
-      URL.revokeObjectURL(primaryUrl);
-      URL.revokeObjectURL(mp4Url);
-    };
+    return () => URL.revokeObjectURL(url);
   }, [videoFile]);
 
   useEffect(() => {
@@ -61,10 +49,6 @@ export function VideoAnalysis({ videoFile, result, confidence, confidenceLabel, 
     video.load();
 
     const handleTimeUpdate = () => setCurrentTime(video.currentTime);
-    const handleReady = () => {
-      setIsVideoReady(true);
-      setVideoError(false);
-    };
     const handleLoadedMetadata = () => {
       setDuration(video.duration);
       setNaturalSize({
@@ -73,16 +57,9 @@ export function VideoAnalysis({ videoFile, result, confidence, confidenceLabel, 
       });
       setVideoError(false);
     };
-    const handleLoadedData = () => handleReady();
-    const handleCanPlay = () => handleReady();
-    const handlePlaying = () => handleReady();
-    const handlePlaybackError = () => {
-      setIsVideoReady(false);
-      if (!usingFallbackSource && fallbackVideoUrl && fallbackVideoUrl !== videoUrl) {
-        setUsingFallbackSource(true);
-        return;
-      }
-      setVideoError(true);
+    const handleLoadedData = () => {
+      setIsVideoReady(true);
+      setVideoError(false);
     };
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
@@ -91,9 +68,6 @@ export function VideoAnalysis({ videoFile, result, confidence, confidenceLabel, 
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('loadeddata', handleLoadedData);
-    video.addEventListener('canplay', handleCanPlay);
-    video.addEventListener('playing', handlePlaying);
-    video.addEventListener('error', handlePlaybackError);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
     video.addEventListener('ended', handleEnded);
@@ -102,28 +76,21 @@ export function VideoAnalysis({ videoFile, result, confidence, confidenceLabel, 
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('loadeddata', handleLoadedData);
-      video.removeEventListener('canplay', handleCanPlay);
-      video.removeEventListener('playing', handlePlaying);
-      video.removeEventListener('error', handlePlaybackError);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
     };
-  }, [activeVideoUrl, usingFallbackSource, fallbackVideoUrl, videoUrl]);
+  }, [videoUrl]);
 
   useEffect(() => {
-    if (!activeVideoUrl) return;
+    if (!videoUrl) return;
     const timer = window.setTimeout(() => {
       if (!isVideoReady && !videoError) {
-        if (!usingFallbackSource && fallbackVideoUrl && fallbackVideoUrl !== videoUrl) {
-          setUsingFallbackSource(true);
-          return;
-        }
         setVideoError(true);
       }
-    }, 12000);
+    }, 4000);
     return () => window.clearTimeout(timer);
-  }, [activeVideoUrl, isVideoReady, videoError, usingFallbackSource, fallbackVideoUrl, videoUrl]);
+  }, [videoUrl, isVideoReady, videoError]);
 
   const togglePlay = () => {
     if (!videoRef.current) return;
@@ -266,14 +233,19 @@ export function VideoAnalysis({ videoFile, result, confidence, confidenceLabel, 
       {/* Video Player with Bounding Box */}
       <div className="relative bg-black rounded-lg overflow-hidden">
         <video
-          key={activeVideoUrl}
+          key={videoUrl}
           ref={videoRef}
           className="w-full aspect-video bg-black"
-          src={activeVideoUrl}
-          preload="metadata"
+          preload="auto"
           playsInline
           controls
+          onClick={togglePlay}
+          onError={() => {
+            setVideoError(true);
+            setIsVideoReady(false);
+          }}
         >
+          <source src={videoUrl} type={videoFile.type || 'video/mp4'} />
         </video>
         {!videoError && !isVideoReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-sm">
