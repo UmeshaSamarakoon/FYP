@@ -13,7 +13,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
 
-from src.modules.causal_fusion import CausalFusionNetwork, CausalFusionNetworkV2
+from src.modules.causal_fusion import CausalFusionNetworkV2
 from src.cvi.feature_schema import resolve_feature_columns
 
 DEFAULT_SEED = 42
@@ -995,18 +995,10 @@ def main():
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    use_v2 = (
-        bool(args.use_embeddings)
-        or int(X_av_train.shape[1]) != 3
-        or int(X_phys_train.shape[1]) != 2
-    )
-    if use_v2:
-        model = CausalFusionNetworkV2(
-            av_dim=X_av_train.shape[1],
-            phys_dim=X_phys_train.shape[1],
-        ).to(device)
-    else:
-        model = CausalFusionNetwork().to(device)
+    model = CausalFusionNetworkV2(
+        av_dim=X_av_train.shape[1],
+        phys_dim=X_phys_train.shape[1],
+    ).to(device)
 
     if use_weights:
         criterion = torch.nn.BCELoss(reduction="none")
@@ -1031,7 +1023,7 @@ def main():
     epochs_no_improve = 0
 
     os.makedirs(args.model_dir, exist_ok=True)
-    model_path = os.path.join(args.model_dir, "cfn_emb.pth" if args.use_embeddings else "cfn.pth")
+    model_path = os.path.join(args.model_dir, "cfn_emb.pth")
     scaler_path = os.path.join(args.model_dir, "cfn_scaler.pkl")
     threshold_report_path = os.path.join(args.model_dir, "cfn_threshold_report.json")
 

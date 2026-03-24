@@ -117,8 +117,27 @@ def visual_tcn_embedding(lip_signal: np.ndarray, checkpoint: str | None) -> np.n
         return emb.reshape(1, -1)
 
 
-def wav2vec_embedding(waveform: np.ndarray, sr: int, model_name: str) -> np.ndarray:
+def wav2vec_embedding(
+    waveform: np.ndarray,
+    sr: int,
+    model_name: str,
+    checkpoint_path: str | None = None,
+) -> np.ndarray:
+    # checkpoint_path reserved for future fine-tuned wav2vec support
+    _ = checkpoint_path
     embedder = _load_wav2vec(model_name)
     if embedder is None:
         return np.zeros((1, 1), dtype=np.float32)
     return embedder.embed(waveform, sr)
+
+
+def efficientnet_b4_embedding(frames: list[np.ndarray], checkpoint_path: str | None = None) -> np.ndarray:
+    """
+    Placeholder EfficientNet-B4 embedding helper.
+    Returns zeros when no model is available.
+    """
+    _ = checkpoint_path
+    if not frames:
+        return np.zeros((1, 1), dtype=np.float32)
+    return np.zeros((len(frames), 1), dtype=np.float32)
+

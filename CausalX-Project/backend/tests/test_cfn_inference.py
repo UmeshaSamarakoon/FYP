@@ -1,20 +1,34 @@
 import os
 import sys
+from pathlib import Path
 
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(project_root)
+import numpy as np
+import pytest
 
-from src.cvi.cfn_frame_inference import run_cfn_on_video
 
-VIDEO = "data/raw/fakeavceleb/FakeVideo-FakeAudio/African/men/id00076/00109_2_id00166_wavtolip.mp4"  # sample video
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-results = run_cfn_on_video(VIDEO)
+os.environ.setdefault("MPLCONFIGDIR", str(PROJECT_ROOT / ".mplconfig"))
+os.environ.setdefault("MEDIAPIPE_DISABLE_GPU", "1")
 
-print(f"Frames processed: {len(results)}")
+from src.cvi.api.inference_service import build_inference_controller
 
-for r in results[:10]:
-    print(
-        f"t={r['timestamp']:.2f}s | "
-        f"fake_prob={r['fake_prob']:.3f} | "
-        f"AV mismatch={r['av_mismatch']:.2f}"
-    )
+
+SAMPLE_VIDEO = PROJECT_ROOT / "data/validation_evaluation_videos/evaluation/data/raw/fakeavceleb/FakeVideo-FakeAudio/African/women/id00220/00027_id00220_wavtolip.mp4"
+
+
+@pytest.mark.skipif(not SAMPLE_VIDEO.exists(), reason="Sample FakeAVCeleb video is not available in this workspace.")
+def test_inference_controller_processes_sample_video():
+    controller = build_inference_controller()
+    output = controller.process(str(SAMPLE_VIDEO))
+
+    assert isinstance(output, dict)
+    assert isinstance(output.get("frames"), list)
+    assert len(output["frames"]) > 0
+    assert "fake_confidence" in output
+    assert "overall_score" in output
+    assert "causal_segments" in output
+    frame_probs = np.asarray([float(frame.get("fake_prob", 0.0)) for frame in output["frames"]], dtype=np.float32)
+    assert float(frame_probs.std()) > 0.0

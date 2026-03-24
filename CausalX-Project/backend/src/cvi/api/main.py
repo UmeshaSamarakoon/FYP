@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 import shutil
 import os
 import uuid
@@ -7,6 +8,12 @@ from pathlib import Path
 
 from src.cvi.api.inference_service import run_full_cvi_pipeline
 from src.cvi.api.background_worker import BackgroundWorker
+from src.cvi.api.result_reporting import emit_hidden_score_summary
+from src.cvi.api.video_preview import (
+    cleanup_preview_cache,
+    ensure_video_preview,
+    preview_path_for_analysis,
+)
 from src.cvi.storage.results_store import get_result, list_results, save_result
 from src.cvi.storage.logs_store import list_logs, log_event
 
@@ -36,6 +43,7 @@ def _safe_upload_path(filename: str) -> str:
 
 @app.on_event("startup")
 def startup_worker():
+    cleanup_preview_cache(force=True)
     worker.start()
 
 
@@ -49,6 +57,14 @@ async def health_check():
     return {"status": "ok"}
 
 
+@app.get("/preview/{analysis_id}")
+async def get_video_preview(analysis_id: str):
+    preview_path = preview_path_for_analysis(analysis_id)
+    if not preview_path.exists():
+        raise HTTPException(status_code=404, detail="Preview not found")
+    return FileResponse(preview_path, media_type="video/mp4", filename=preview_path.name)
+
+
 @app.post("/analyze")
 async def analyze_video(file: UploadFile = File(...)):
     analysis_id = str(uuid.uuid4())
@@ -59,9 +75,13 @@ async def analyze_video(file: UploadFile = File(...)):
         with open(video_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
+        preview_url = ensure_video_preview(analysis_id, video_path)
         log_event(analysis_id, "processing_started")
         pipeline_output = run_full_cvi_pipeline(video_path)
         frame_results = pipeline_output["frames"]
+        if preview_url:
+            pipeline_output["preview_url"] = preview_url
+        emit_hidden_score_summary(analysis_id, file.filename, pipeline_output)
 
         label = "FAKE" if pipeline_output.get("video_fake") else "REAL"
 
@@ -71,6 +91,12 @@ async def analyze_video(file: UploadFile = File(...)):
             "video_fake": label,
             "fake_confidence": pipeline_output.get("fake_confidence"),
             "overall_score": pipeline_output.get("overall_score"),
+            "causal_breach_score": pipeline_output.get("causal_breach_score"),
+            "scm_enabled": pipeline_output.get("scm_enabled"),
+            "decision_source": pipeline_output.get("decision_source"),
+            "legacy_fake_ratio": pipeline_output.get("legacy_fake_ratio"),
+            "calibrator_score": pipeline_output.get("calibrator_score"),
+            "preview_url": preview_url,
             "highlight_timestamps": pipeline_output.get("highlight_timestamps", []),
             "causal_segments": pipeline_output.get("causal_segments", []),
             "frames": frame_results
@@ -86,6 +112,7 @@ async def analyze_video(file: UploadFile = File(...)):
 
 @app.post("/analyze/async")
 async def analyze_video_async(file: UploadFile = File(...)):
+    analysis_id = str(uuid.uuid4())
     video_path = _safe_upload_path(file.filename)
 
     try:
@@ -96,12 +123,14 @@ async def analyze_video_async(file: UploadFile = File(...)):
             os.remove(video_path)
         raise HTTPException(status_code=500, detail=f"Failed to save upload: {exc}") from exc
 
-    job_id = worker.submit(video_path)
+    preview_url = ensure_video_preview(analysis_id, video_path)
+    job_id = worker.submit(video_path, job_id=analysis_id)
 
     return {
         "job_id": job_id,
         "analysis_id": job_id,
-        "status": "queued"
+        "status": "queued",
+        "preview_url": preview_url,
     }
 
 

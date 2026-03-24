@@ -13,6 +13,7 @@ interface AnalysisResult {
   result: 'REAL' | 'FAKE';
   confidence: number;
   confidenceLabel: string;
+  previewUrl?: string | null;
   causalBreachScore?: number;
   breachSegments: BreachSegment[];
   frames: FrameResult[];
@@ -94,6 +95,7 @@ export default function App() {
         result: resultLabel,
         confidence,
         confidenceLabel,
+        previewUrl: res.preview_url ?? null,
         causalBreachScore: resultLabel === "FAKE" ? res.causal_breach_score : undefined,
         breachSegments: resultLabel === "FAKE" ? segments : [],
         frames,
@@ -157,6 +159,7 @@ export default function App() {
           <div className="flex items-center justify-center">
             <VideoAnalysis
               videoFile={uploadedFile}
+              previewUrl={analysisResult.previewUrl}
               result={analysisResult.result}
               confidence={analysisResult.confidence}
               confidenceLabel={analysisResult.confidenceLabel}

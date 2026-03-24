@@ -6,6 +6,8 @@ import uuid
 from dataclasses import dataclass, field
 
 from src.cvi.api.inference_service import run_full_cvi_pipeline
+from src.cvi.api.result_reporting import emit_hidden_score_summary
+from src.cvi.api.video_preview import preview_exists, preview_url_for_analysis
 from src.cvi.storage.results_store import save_result
 from src.cvi.storage.logs_store import log_event
 
@@ -38,8 +40,8 @@ class BackgroundWorker:
         if self._thread:
             self._thread.join(timeout=2)
 
-    def submit(self, video_path: str) -> str:
-        job_id = str(uuid.uuid4())
+    def submit(self, video_path: str, job_id: str | None = None) -> str:
+        job_id = job_id or str(uuid.uuid4())
         record = JobRecord(job_id=job_id, video_path=video_path)
         self._jobs[job_id] = record
         self._queue.put(record)
@@ -60,6 +62,13 @@ class BackgroundWorker:
             try:
                 log_event(record.job_id, "running")
                 record.result = run_full_cvi_pipeline(record.video_path)
+                if preview_exists(record.job_id):
+                    record.result["preview_url"] = preview_url_for_analysis(record.job_id)
+                emit_hidden_score_summary(
+                    record.job_id,
+                    record.result.get("video_name", record.video_path),
+                    record.result,
+                )
                 save_result(
                     analysis_id=record.job_id,
                     video_name=record.result.get("video_name", record.video_path),

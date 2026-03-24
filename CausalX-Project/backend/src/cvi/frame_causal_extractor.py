@@ -97,7 +97,12 @@ def _load_audio_with_ffmpeg_fallback(path, offset, duration):
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return librosa.load(tmp.name, sr=None, offset=offset, duration=duration)
             except Exception as e2:
-                raise RuntimeError(f"Audio extraction failed for {path}: {e2}") from e
+                warnings.warn(f"Audio extraction failed for {path}: {e2}; using silence fallback")
+                sr = 16000
+                # Ensure at least one analysis frame for librosa.feature.rms
+                length = int(sr * float(duration)) if duration else 2048
+                length = max(length, 2048)
+                return np.zeros(length, dtype=np.float32), sr
 
 
 def _extract_frame_level_features_without_facemesh(

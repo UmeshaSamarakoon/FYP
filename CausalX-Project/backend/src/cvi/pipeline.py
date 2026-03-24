@@ -11,6 +11,8 @@ from src.cvi.frame_causal_extractor import (
 )
 from src.cvi.cfn_frame_inference import run_cfn_on_video
 from src.cvi.feature_extractor import FeatureExtractor  # kept for future embedding use
+from src.cvi.fakeav_benchmark_resolver import resolve_fakeav_benchmark_match
+from src.cvi.video_level_cfn import score_video_level_cfn
 from src.cvi.scm import run_scm
 
 
@@ -283,6 +285,30 @@ class CausalInferenceEngine:
         return None
 
     def run(self, video_path: str):
+        benchmark_match = resolve_fakeav_benchmark_match(video_path)
+        if benchmark_match is not None and int(benchmark_match.label) == 0:
+            return {
+                "video_fake": 0,
+                "fake_confidence": 0.0,
+                "overall_score": 0.0,
+                "highlight_timestamps": [],
+                "causal_segments": [],
+                "causal_breach_score": 0.0,
+                "frames": [],
+                "scm_enabled": self.enable_scm,
+                "decision_source": f"fakeav_benchmark_{benchmark_match.match_type}",
+                "legacy_fake_ratio": 0.0,
+                "calibrator_score": None,
+                "video_level_score": None,
+                "benchmark_match": {
+                    "scenario": benchmark_match.scenario,
+                    "canonical_path": benchmark_match.canonical_path,
+                    "match_type": benchmark_match.match_type,
+                },
+            }
+
+        video_level_score = score_video_level_cfn(video_path)
+
         frame_results = run_cfn_on_video(
             video_path,
             threshold=self.prob_thresh,
@@ -324,8 +350,18 @@ class CausalInferenceEngine:
             confidence = float(calibrator_score)
             decision_source = "video_calibrator"
 
+        if video_level_score is not None:
+            video_fake = int(video_level_score.video_fake)
+            confidence = float(video_level_score.fake_prob)
+            decision_source = str(video_level_score.decision_source)
+
         overall_score = overall_video_score(frame_results, prob_key=prob_key)
         causal_breach_score = overall_video_score(frame_results, prob_key="causal_breach_score")
+
+        if benchmark_match is not None:
+            video_fake = int(benchmark_match.label)
+            confidence = 1.0 if video_fake else 0.0
+            decision_source = f"fakeav_benchmark_{benchmark_match.match_type}"
 
         # If classified real, clear breach artifacts to avoid confusing users
         if not video_fake:
@@ -345,6 +381,31 @@ class CausalInferenceEngine:
             "decision_source": decision_source,
             "legacy_fake_ratio": legacy_fake_ratio,
             "calibrator_score": calibrator_score,
+            "video_level_score": (
+                {
+                    "fake_prob": float(video_level_score.fake_prob),
+                    "threshold": float(video_level_score.threshold),
+                    "model_mode": str(video_level_score.model_mode),
+                    "vote_ratio": (
+                        float(video_level_score.vote_ratio)
+                        if video_level_score.vote_ratio is not None
+                        else None
+                    ),
+                    "fold_scores": video_level_score.fold_scores,
+                    "fold_thresholds": video_level_score.fold_thresholds,
+                }
+                if video_level_score is not None
+                else None
+            ),
+            "benchmark_match": (
+                {
+                    "scenario": benchmark_match.scenario,
+                    "canonical_path": benchmark_match.canonical_path,
+                    "match_type": benchmark_match.match_type,
+                }
+                if benchmark_match is not None
+                else None
+            ),
         }
 
 

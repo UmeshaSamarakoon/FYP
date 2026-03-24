@@ -7,7 +7,7 @@ import joblib
 import librosa
 import warnings
 from src.cvi.face_bbox_highlighter import detect_face_bbox, mouth_bbox_from_landmarks
-from src.modules.causal_fusion import CausalFusionNetwork, CausalFusionNetworkV2
+from src.modules.causal_fusion import CausalFusionNetworkV2
 from src.cvi.feature_extractor import FeatureExtractor
 from src.cvi.frame_causal_extractor import (
     extract_frame_level_features,
@@ -27,7 +27,6 @@ from src.cvi.feature_schema import (
 # --------------------------------------------------
 
 _MODULE_DIR = Path(__file__).resolve().parents[2]
-MODEL_PATH = _MODULE_DIR / "models" / "cfn.pth"
 DEVICE = torch.device("cpu")
 
 _model = None
@@ -51,6 +50,7 @@ _AV_FEATURE_ORDER = list(BASELINE_AV_FEATURES) + list(EXTENDED_AV_FEATURES) + [
 _PHYS_FEATURE_ORDER = list(BASELINE_PHYS_FEATURES) + list(EXTENDED_PHYS_FEATURES)
 _LIP_FEATURE_ORDER = list(LIP_STREAM_FEATURES)
 _DEFAULT_EMB_MODEL_PATH = _MODULE_DIR / "models" / "featup_dfdcplus2_v5_specguard" / "cfn_emb.pth"
+_DEFAULT_ENSEMBLE_MANIFEST_PATH = _MODULE_DIR / "models" / "fakeavceleb_best_step46_multiseed_manifest.json"
 _T2A_ENABLE = os.getenv("CFN_T2A_ENABLE", "false").lower() == "true"
 _T2A_TARGET_ENTROPY = float(os.getenv("CFN_T2A_TARGET_ENTROPY", "0.58"))
 _T2A_MAX_TEMP = float(os.getenv("CFN_T2A_MAX_TEMP", "2.5"))
@@ -58,6 +58,7 @@ _T2A_MIN_FRAMES = int(os.getenv("CFN_T2A_MIN_FRAMES", "24"))
 _TEMP_SCALE_FALLBACK = float(os.getenv("CFN_TEMP_SCALE", "1.0"))
 _TEMP_SCALE_PATH = os.getenv("CFN_TEMP_SCALE_PATH", "").strip() or None
 _RUNTIME_TEMP_SCALE = None
+_FEATURE_Z_CLIP = float(os.getenv("CFN_FEATURE_Z_CLIP", "20.0"))
 
 
 def _use_embeddings() -> bool:
@@ -117,11 +118,19 @@ def _resolve_runtime_temperature() -> float:
     if _TEMP_SCALE_PATH:
         candidate_paths.append(Path(_TEMP_SCALE_PATH))
     else:
-        try:
-            emb_model_path = Path(os.getenv("CFN_EMB_MODEL_PATH", str(_DEFAULT_EMB_MODEL_PATH)))
-            candidate_paths.append(emb_model_path.parent / "cfn_temperature.json")
-        except Exception:
-            pass
+        explicit_emb_model = os.getenv("CFN_EMB_MODEL_PATH", "").strip()
+        explicit_ensemble_paths = os.getenv("CFN_ENSEMBLE_MODEL_PATHS", "").strip()
+        manifest_path = _resolve_manifest_path(single_model_override=explicit_emb_model)
+        if explicit_emb_model:
+            try:
+                candidate_paths.append(Path(explicit_emb_model).parent / "cfn_temperature.json")
+            except Exception:
+                pass
+        elif not explicit_ensemble_paths and manifest_path is None:
+            try:
+                candidate_paths.append(_DEFAULT_EMB_MODEL_PATH.parent / "cfn_temperature.json")
+            except Exception:
+                pass
         candidate_paths.append(_MODULE_DIR / "models" / "cfn_temperature.json")
 
     for p in candidate_paths:
@@ -139,6 +148,44 @@ def _resolve_runtime_temperature() -> float:
 
 def _split_env_paths(value: str):
     return [Path(p.strip()) for p in value.split(",") if p.strip()]
+
+
+def _resolve_relative_path(value, base_dir: Path) -> Path:
+    p = Path(value)
+    return p if p.is_absolute() else (base_dir / p)
+
+
+def _resolve_manifest_path(single_model_override: str = ""):
+    explicit = os.getenv("CFN_ENSEMBLE_MANIFEST_PATH", "").strip()
+    if explicit:
+        return Path(explicit)
+    if not single_model_override and _DEFAULT_ENSEMBLE_MANIFEST_PATH.exists():
+        return _DEFAULT_ENSEMBLE_MANIFEST_PATH
+    return None
+
+
+def _load_manifest_artifacts(manifest_path: Path):
+    payload = json.loads(manifest_path.read_text())
+    entries = payload.get("artifacts")
+    if not isinstance(entries, list) or not entries:
+        raise RuntimeError(f"Manifest '{manifest_path}' has no artifact entries.")
+
+    model_paths = []
+    scaler_paths = []
+    for idx, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            raise RuntimeError(f"Manifest '{manifest_path}' entry #{idx} is not an object.")
+        model_path = entry.get("model_path")
+        scaler_path = entry.get("scaler_path")
+        if not model_path:
+            raise RuntimeError(f"Manifest '{manifest_path}' entry #{idx} is missing model_path.")
+        resolved_model = _resolve_relative_path(model_path, manifest_path.parent)
+        model_paths.append(resolved_model)
+        if scaler_path:
+            scaler_paths.append(_resolve_relative_path(scaler_path, manifest_path.parent))
+        else:
+            scaler_paths.append(_resolve_single_scaler_path(resolved_model))
+    return model_paths, scaler_paths
 
 
 def _resolve_single_scaler_path(model_path: Path) -> Path:
@@ -161,6 +208,14 @@ def _build_model_from_state(state, use_emb):
             return int(w.shape[1])
         return 0
 
+    def _classifier_in_dim() -> int:
+        if not isinstance(state, dict):
+            return 0
+        w = state.get("classifier.0.weight")
+        if isinstance(w, torch.Tensor) and w.ndim >= 2:
+            return int(w.shape[1])
+        return 0
+
     av_dim = _infer_in_dim("av_branch.0.weight")
     phys_dim = _infer_in_dim("physical_branch.0.weight")
     lip_dim = _infer_in_dim("lip_branch.0.weight")
@@ -174,23 +229,25 @@ def _build_model_from_state(state, use_emb):
         av_dim = 4 if use_emb else 3
     if phys_dim <= 0:
         phys_dim = 2
+    if _classifier_in_dim() == 4:
+        raise RuntimeError(
+            "Legacy CFN V1 checkpoints are not supported by the current runtime. "
+            "Use the active V2 `cfn_emb.pth` checkpoints or the production ensemble manifest."
+        )
     if lip_dim < 0:
         lip_dim = 0
-
-    # Keep backward compatibility with legacy fixed-dim checkpoints.
-    if not use_emb and av_dim == 3 and phys_dim == 2 and lip_dim <= 0:
-        model = CausalFusionNetwork(
-            enable_causal_breach_head=enable_causal_breach_head,
-            enable_av_input_layernorm=enable_av_input_layernorm,
-        ).to(DEVICE)
-    else:
-        model = CausalFusionNetworkV2(
-            av_dim=av_dim,
-            phys_dim=phys_dim,
-            lip_dim=lip_dim,
-            enable_causal_breach_head=enable_causal_breach_head,
-            enable_av_input_layernorm=enable_av_input_layernorm,
-        ).to(DEVICE)
+    if lip_dim > 0:
+        raise RuntimeError(
+            "CFN lip-branch checkpoints are not supported by the current runtime. "
+            "Use the active two-branch V2 ensemble or restore a compatible 3-branch model definition."
+        )
+    model = CausalFusionNetworkV2(
+        av_dim=av_dim,
+        phys_dim=phys_dim,
+        lip_dim=0,
+        enable_causal_breach_head=enable_causal_breach_head,
+        enable_av_input_layernorm=enable_av_input_layernorm,
+    ).to(DEVICE)
     load_result = model.load_state_dict(state, strict=False)
     if load_result.missing_keys:
         warnings.warn(
@@ -203,7 +260,7 @@ def _build_model_from_state(state, use_emb):
             + ", ".join(load_result.unexpected_keys)
         )
     model.eval()
-    return model, av_dim, phys_dim, lip_dim
+    return model, av_dim, phys_dim, 0
 
 
 def _load_artifacts():
@@ -219,6 +276,8 @@ def _load_artifacts():
         use_emb = _use_embeddings()
         ensemble_model_paths_raw = os.getenv("CFN_ENSEMBLE_MODEL_PATHS", "").strip()
         ensemble_scaler_paths_raw = os.getenv("CFN_ENSEMBLE_SCALER_PATHS", "").strip()
+        single_model_override = os.getenv("CFN_EMB_MODEL_PATH", "").strip()
+        manifest_path = _resolve_manifest_path(single_model_override=single_model_override)
 
         if ensemble_model_paths_raw:
             model_paths = _split_env_paths(ensemble_model_paths_raw)
@@ -232,6 +291,10 @@ def _load_artifacts():
             else:
                 scaler_paths = []
                 for mp in model_paths:
+                    sibling = mp.parent / "cfn_scaler.pkl"
+                    if sibling.exists():
+                        scaler_paths.append(sibling)
+                        continue
                     # Infer sibling scaler path for matrix artifacts, fallback to default scaler.
                     name = mp.name
                     if name.startswith("cfn_emb_"):
@@ -252,9 +315,21 @@ def _load_artifacts():
                     _scalers.append(joblib.load(scaler_path))
                 else:
                     _scalers.append(None)
+        elif manifest_path is not None:
+            model_paths, scaler_paths = _load_manifest_artifacts(manifest_path)
+            for model_path, scaler_path in zip(model_paths, scaler_paths):
+                state = torch.load(model_path, map_location=DEVICE)
+                model, av_dim, phys_dim, lip_dim = _build_model_from_state(state, use_emb=use_emb)
+                _models.append(model)
+                _AV_DIMS.append(av_dim)
+                _PHYS_DIMS.append(phys_dim)
+                _LIP_DIMS.append(lip_dim)
+                if scaler_path.exists():
+                    _scalers.append(joblib.load(scaler_path))
+                else:
+                    _scalers.append(None)
         else:
-            emb_model_path = Path(os.getenv("CFN_EMB_MODEL_PATH", _DEFAULT_EMB_MODEL_PATH))
-            model_path = emb_model_path if use_emb else MODEL_PATH
+            model_path = Path(single_model_override or _DEFAULT_EMB_MODEL_PATH)
             state = torch.load(model_path, map_location=DEVICE)
             model, av_dim, phys_dim, lip_dim = _build_model_from_state(state, use_emb=use_emb)
             _models = [model]
@@ -276,7 +351,8 @@ def _load_artifacts():
         _scaler = _scalers[0]
     except FileNotFoundError as exc:  # noqa: PERF203
         raise RuntimeError(
-            "CFN model weights not found. Set CFN_EMB_MODEL_PATH / models/cfn.pth."
+            "CFN model weights not found. Set CFN_ENSEMBLE_MANIFEST_PATH, "
+            "CFN_ENSEMBLE_MODEL_PATHS, or CFN_EMB_MODEL_PATH."
         ) from exc
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError(f"Failed to load CFN model: {exc}") from exc
@@ -327,6 +403,16 @@ def _prepare_features_for_model(base_av_vals, base_phys_vals, base_lip_vals, av_
             if lip_features is not None:
                 lip_features = lip_features.astype(np.float32, copy=False)
 
+    # Some historical scalers contain near-zero variance on a few columns
+    # (notably AV range-style features), which can explode z-scores and force
+    # saturated 0/1 outputs across all frames. Bound the normalized features
+    # before model inference to keep the active ensemble numerically useful.
+    if _FEATURE_Z_CLIP > 0:
+        av_features = np.clip(av_features, -_FEATURE_Z_CLIP, _FEATURE_Z_CLIP).astype(np.float32, copy=False)
+        phys_features = np.clip(phys_features, -_FEATURE_Z_CLIP, _FEATURE_Z_CLIP).astype(np.float32, copy=False)
+        if lip_features is not None:
+            lip_features = np.clip(lip_features, -_FEATURE_Z_CLIP, _FEATURE_Z_CLIP).astype(np.float32, copy=False)
+
     return av_features, phys_features, lip_features
 
 
@@ -345,6 +431,20 @@ def _load_audio_segment(video_path, offset, duration):
 
 def _ordered_feature_values(feature_map, ordered_cols):
     return [float(feature_map.get(c, 0.0)) for c in ordered_cols]
+
+
+def _model_forward(model, av_tensor, phys_tensor, lip_tensor=None):
+    """
+    Run a CFN checkpoint while tolerating legacy call sites that still prepare
+    an optional lip tensor. The current production models are 2-branch, but
+    some historical checkpoints/callers still thread a third input through.
+    """
+    try:
+        if lip_tensor is not None:
+            return model(av_tensor, phys_tensor, lip_tensor)
+        return model(av_tensor, phys_tensor)
+    except TypeError:
+        return model(av_tensor, phys_tensor)
 
 
 def run_cfn_on_video(
@@ -499,7 +599,7 @@ def run_cfn_on_video(
                         if lip_features is not None
                         else None
                     )
-                    probs.append(model(X_av, X_phys, X_lip).item())
+                    probs.append(_model_forward(model, X_av, X_phys, X_lip).item())
             prob = float(np.mean(probs)) if probs else 0.0
 
             bbox = None

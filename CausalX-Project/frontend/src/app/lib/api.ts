@@ -32,6 +32,10 @@ export type AnalyzeResponse = {
   overall_score?: number;
   causal_breach_score?: number;
   scm_enabled?: boolean;
+  decision_source?: string;
+  legacy_fake_ratio?: number;
+  calibrator_score?: number | null;
+  preview_url?: string | null;
   highlight_timestamps?: number[];
   causal_segments?: { start: number; end: number; score?: number }[];
   frames: FrameResult[];
@@ -40,6 +44,7 @@ export type AnalyzeResponse = {
 type AnalyzeAsyncSubmitResponse = {
   job_id: string;
   status: "queued" | "running";
+  preview_url?: string | null;
 };
 
 type AnalyzeJobStatusResponse = {
@@ -70,6 +75,13 @@ function asPositiveNumber(value: number, fallback: number): number {
 function retryDelay(baseMs: number, attempt: number): number {
   const jitterMs = Math.floor(Math.random() * 250);
   return baseMs * Math.max(1, 2 ** attempt) + jitterMs;
+}
+
+function toApiUrl(path: string | null | undefined): string | null {
+  const value = String(path || "").trim();
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  return `${API_URL}${value.startsWith("/") ? value : `/${value}`}`;
 }
 
 function isTransientStatus(status: number | null): boolean {
@@ -256,6 +268,7 @@ export async function analyzeVideo(
     await pingBackend();
     const submit = await submitAsyncAnalysis(file);
     submittedJobId = submit.job_id;
+    const previewUrl = toApiUrl(submit.preview_url);
     const start = Date.now();
     let statusErrorCount = 0;
 
@@ -281,8 +294,17 @@ export async function analyzeVideo(
       }
 
       if (status.status === "completed") {
-        if (status.result) return status.result;
-        return fetchAnalysisResult(submit.job_id);
+        if (status.result) {
+          return {
+            ...status.result,
+            preview_url: toApiUrl(status.result.preview_url) ?? previewUrl,
+          };
+        }
+        const result = await fetchAnalysisResult(submit.job_id);
+        return {
+          ...result,
+          preview_url: toApiUrl(result.preview_url) ?? previewUrl,
+        };
       }
 
       if (status.status === "failed") {
@@ -300,7 +322,11 @@ export async function analyzeVideo(
       (apiError.status === 404 || apiError.status === 405)
     ) {
       try {
-        return await runDirectAnalysis(file);
+        const result = await runDirectAnalysis(file);
+        return {
+          ...result,
+          preview_url: toApiUrl(result.preview_url),
+        };
       } catch (fallbackError) {
         throw toUserFacingError(fallbackError);
       }
