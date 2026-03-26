@@ -1,0 +1,104 @@
+{
+  "name": "fakeavceleb_best_step46_multiseed",
+  "dataset": "FakeAVCeleb",
+  "selection_basis": "best full FakeAVCeleb multiseed ensemble found under backend/models/experiment_logs on 2026-03-22",
+  "summary_path": "experiment_logs/step46_fakeav_robust_constrained_multiseed_20260317_031816/ensemble_summary.json",
+  "summary_metrics": {
+    "test_acc_mean": 0.9998607242339833,
+    "test_auc_mean": 1.0,
+    "test_f1_mean": 0.9999286767995971,
+    "test_bal_acc_mean": 0.9999287071730457
+  },
+  "artifacts": [
+    {
+      "seed": 42,
+      "fold": "fold_01",
+      "model_path": "step46_fakeav_robust_constrained_s42_20260317_030925_fold_01_p2_r03_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s42_20260317_030925_fold_01_p2_r03_focal_lr0p0003/cfn_scaler.pkl"
+    },
+    {
+      "seed": 42,
+      "fold": "fold_02",
+      "model_path": "step46_fakeav_robust_constrained_s42_20260317_030925_fold_02_p2_r03_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s42_20260317_030925_fold_02_p2_r03_focal_lr0p0003/cfn_scaler.pkl"
+    },
+    {
+      "seed": 42,
+      "fold": "fold_03",
+      "model_path": "step46_fakeav_robust_constrained_s42_20260317_030925_fold_03_p2_r02_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s42_20260317_030925_fold_03_p2_r02_focal_lr0p0003/cfn_scaler.pkl"
+    },
+    {
+      "seed": 42,
+      "fold": "fold_04",
+      "model_path": "step46_fakeav_robust_constrained_s42_20260317_030925_fold_04_p2_r02_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s42_20260317_030925_fold_04_p2_r02_focal_lr0p0003/cfn_scaler.pkl"
+    },
+    {
+      "seed": 42,
+      "fold": "fold_05",
+      "model_path": "step46_fakeav_robust_constrained_s42_20260317_030925_fold_05_p2_r03_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s42_20260317_030925_fold_05_p2_r03_focal_lr0p0003/cfn_scaler.pkl"
+    },
+    {
+      "seed": 1337,
+      "fold": "fold_01",
+      "model_path": "step46_fakeav_robust_constrained_s1337_20260317_031304_fold_01_p2_r03_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s1337_20260317_031304_fold_01_p2_r03_focal_lr0p0003/cfn_scaler.pkl"
+    },
+    {
+      "seed": 1337,
+      "fold": "fold_02",
+      "model_path": "step46_fakeav_robust_constrained_s1337_20260317_031304_fold_02_p2_r02_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s1337_20260317_031304_fold_02_p2_r02_focal_lr0p0003/cfn_scaler.pkl"
+    },
+    {
+      "seed": 1337,
+      "fold": "fold_03",
+      "model_path": "step46_fakeav_robust_constrained_s1337_20260317_031304_fold_03_p2_r01_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s1337_20260317_031304_fold_03_p2_r01_focal_lr0p0003/cfn_scaler.pkl"
+    },
+    {
+      "seed": 1337,
+      "fold": "fold_04",
+      "model_path": "step46_fakeav_robust_constrained_s1337_20260317_031304_fold_04_p2_r01_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s1337_20260317_031304_fold_04_p2_r01_focal_lr0p0003/cfn_scaler.pkl"
+    },
+    {
+      "seed": 1337,
+      "fold": "fold_05",
+      "model_path": "step46_fakeav_robust_constrained_s1337_20260317_031304_fold_05_p2_r01_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s1337_20260317_031304_fold_05_p2_r01_focal_lr0p0003/cfn_scaler.pkl"
+    },
+    {
+      "seed": 2026,
+      "fold": "fold_01",
+      "model_path": "step46_fakeav_robust_constrained_s2026_20260317_031620_fold_01_p1_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s2026_20260317_031620_fold_01_p1_focal_lr0p0003/cfn_scaler.pkl"
+    },
+    {
+      "seed": 2026,
+      "fold": "fold_02",
+      "model_path": "step46_fakeav_robust_constrained_s2026_20260317_031620_fold_02_p2_r03_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s2026_20260317_031620_fold_02_p2_r03_focal_lr0p0003/cfn_scaler.pkl"
+    },
+    {
+      "seed": 2026,
+      "fold": "fold_03",
+      "model_path": "step46_fakeav_robust_constrained_s2026_20260317_031620_fold_03_p2_r03_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s2026_20260317_031620_fold_03_p2_r03_focal_lr0p0003/cfn_scaler.pkl"
+    },
+    {
+      "seed": 2026,
+      "fold": "fold_04",
+      "model_path": "step46_fakeav_robust_constrained_s2026_20260317_031620_fold_04_p1_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s2026_20260317_031620_fold_04_p1_focal_lr0p0003/cfn_scaler.pkl"
+    },
+    {
+      "seed": 2026,
+      "fold": "fold_05",
+      "model_path": "step46_fakeav_robust_constrained_s2026_20260317_031620_fold_05_p1_focal_lr0p0003/cfn_emb.pth",
+      "scaler_path": "step46_fakeav_robust_constrained_s2026_20260317_031620_fold_05_p1_focal_lr0p0003/cfn_scaler.pkl"
+    }
+  ]
+}
