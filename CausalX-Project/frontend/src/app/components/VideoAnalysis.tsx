@@ -12,6 +12,7 @@ interface CausalBreachSegment {
 
 interface VideoAnalysisProps {
   videoFile: File;
+  previewUrl?: string | null;
   result: 'REAL' | 'FAKE';
   confidence: number;
   confidenceLabel: string;
@@ -21,7 +22,9 @@ interface VideoAnalysisProps {
   probThreshold?: number;
 }
 
-export function VideoAnalysis({ videoFile, result, confidence, confidenceLabel, breachSegments, frames, causalBreachScore, probThreshold = 0.6 }: VideoAnalysisProps) {
+const BBOX_SEGMENT_TOLERANCE_S = 0.05;
+
+export function VideoAnalysis({ videoFile, previewUrl, result, confidence, confidenceLabel, breachSegments, frames, causalBreachScore, probThreshold = 0.6 }: VideoAnalysisProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -29,22 +32,32 @@ export function VideoAnalysis({ videoFile, result, confidence, confidenceLabel, 
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
-  const [videoUrl, setVideoUrl] = useState<string>('');
+  const [localVideoUrl, setLocalVideoUrl] = useState<string>('');
+  const [activeVideoUrl, setActiveVideoUrl] = useState<string>('');
   const [naturalSize, setNaturalSize] = useState({ width: 16, height: 9 });
   const [videoError, setVideoError] = useState(false);
   const [isVideoReady, setIsVideoReady] = useState(false);
 
   useEffect(() => {
     const url = URL.createObjectURL(videoFile);
-    setVideoUrl(url);
+    setLocalVideoUrl(url);
     setVideoError(false);
     setIsVideoReady(false);
     return () => URL.revokeObjectURL(url);
   }, [videoFile]);
 
   useEffect(() => {
+    setActiveVideoUrl(previewUrl || localVideoUrl);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(false);
+    setVideoError(false);
+    setIsVideoReady(false);
+  }, [previewUrl, localVideoUrl]);
+
+  useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !activeVideoUrl) return;
 
     video.load();
 
@@ -80,17 +93,17 @@ export function VideoAnalysis({ videoFile, result, confidence, confidenceLabel, 
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
     };
-  }, [videoUrl]);
+  }, [activeVideoUrl]);
 
   useEffect(() => {
-    if (!videoUrl) return;
+    if (!activeVideoUrl) return;
     const timer = window.setTimeout(() => {
       if (!isVideoReady && !videoError) {
         setVideoError(true);
       }
     }, 4000);
     return () => window.clearTimeout(timer);
-  }, [videoUrl, isVideoReady, videoError]);
+  }, [activeVideoUrl, isVideoReady, videoError]);
 
   const togglePlay = () => {
     if (!videoRef.current) return;
@@ -171,16 +184,20 @@ export function VideoAnalysis({ videoFile, result, confidence, confidenceLabel, 
 
   const isFake = result === 'FAKE';
   const activeBboxFrame = useMemo(() => {
-    if (!isFake || !frames.length) return null;
+    if (!isFake || !currentBreach || !frames.length) return null;
 
-    const withBbox = frames.filter(
-      (f) => Array.isArray(f.bbox) && f.bbox.length === 4,
+    const withBboxInCurrentBreach = frames.filter(
+      (f) =>
+        Array.isArray(f.bbox) &&
+        f.bbox.length === 4 &&
+        f.timestamp >= currentBreach.start - BBOX_SEGMENT_TOLERANCE_S &&
+        f.timestamp <= currentBreach.end + BBOX_SEGMENT_TOLERANCE_S,
     );
-    if (!withBbox.length) return null;
+    if (!withBboxInCurrentBreach.length) return null;
 
-    let closest = withBbox[0];
+    let closest = withBboxInCurrentBreach[0];
     let minDiff = Math.abs(currentTime - closest.timestamp);
-    for (const f of withBbox) {
+    for (const f of withBboxInCurrentBreach) {
       const diff = Math.abs(currentTime - f.timestamp);
       if (diff < minDiff) {
         closest = f;
@@ -188,10 +205,10 @@ export function VideoAnalysis({ videoFile, result, confidence, confidenceLabel, 
       }
     }
     return closest;
-  }, [isFake, frames, currentTime]);
+  }, [currentBreach, isFake, frames, currentTime]);
 
   const bbox = activeBboxFrame?.bbox;
-  const showBoundingBox = isFake && Boolean(bbox);
+  const showBoundingBox = isFake && Boolean(currentBreach && bbox);
   const bboxStyle = useMemo(() => {
     if (!bbox || !videoRef.current) return null;
     const [x1, y1, x2, y2] = bbox;
@@ -233,20 +250,25 @@ export function VideoAnalysis({ videoFile, result, confidence, confidenceLabel, 
       {/* Video Player with Bounding Box */}
       <div className="relative bg-black rounded-lg overflow-hidden">
         <video
-          key={videoUrl}
+          key={activeVideoUrl}
           ref={videoRef}
           className="w-full aspect-video bg-black"
+          src={activeVideoUrl}
           preload="auto"
           playsInline
           controls
           onClick={togglePlay}
           onError={() => {
+            if (activeVideoUrl !== localVideoUrl && localVideoUrl) {
+              setActiveVideoUrl(localVideoUrl);
+              setVideoError(false);
+              setIsVideoReady(false);
+              return;
+            }
             setVideoError(true);
             setIsVideoReady(false);
           }}
-        >
-          <source src={videoUrl} type={videoFile.type || 'video/mp4'} />
-        </video>
+        />
         {!videoError && !isVideoReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-sm">
             Loading video preview...
@@ -256,10 +278,10 @@ export function VideoAnalysis({ videoFile, result, confidence, confidenceLabel, 
           <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white text-center px-6">
             <div className="space-y-2">
               <p>
-                Unable to render this video preview. Your browser may not support this codec.
+                Unable to render this video preview. A browser-compatible fallback was attempted but playback still failed.
               </p>
               <p className="text-xs text-white/70">
-                Try another MP4 (H.264/AAC) or use the native controls to test playback.
+                This usually means the source video codec is not supported by the browser.
               </p>
             </div>
           </div>

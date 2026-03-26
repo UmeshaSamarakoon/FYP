@@ -92,6 +92,26 @@ def _safe_div(a: float, b: float) -> float:
     return float(a / b) if b else 0.0
 
 
+def _normalize_causal_weights(av_weight: float, prob_weight: float, default_av: float = 0.65, default_prob: float = 0.35):
+    """
+    Normalize a pair of non-negative weights so they sum to 1.
+    Falls back to default weights when the inputs are invalid.
+    """
+    try:
+        av = float(av_weight)
+        prob = float(prob_weight)
+    except (TypeError, ValueError):
+        return default_av, default_prob
+
+    if av < 0 or prob < 0:
+        return default_av, default_prob
+
+    total = av + prob
+    if total > 0:
+        return av / total, prob / total
+    return default_av, default_prob
+
+
 def _metrics(y_true, y_pred):
     y_true = np.asarray(y_true, dtype=int)
     y_pred = np.asarray(y_pred, dtype=int)
@@ -163,11 +183,27 @@ def main():
     parser.add_argument("--min-spec", type=float, default=0.0, help="Optional specificity floor for threshold selection")
     parser.add_argument(
         "--optimize",
-        choices=["macro", "dfdc"],
+        choices=["macro"],
         default="macro",
-        help="Threshold objective: macro-balanced (default) or DFDC-prioritized.",
+        help="Threshold objective: macro-balanced (only option).",
+    )
+    parser.add_argument(
+        "--causal-av-weight",
+        type=float,
+        default=0.65,
+        help="Base weight applied to av_mismatch when computing the causal breach score.",
+    )
+    parser.add_argument(
+        "--causal-prob-weight",
+        type=float,
+        default=0.35,
+        help="Base weight applied to fake_prob when computing the causal breach score.",
     )
     args = parser.parse_args()
+
+    causal_av_weight, causal_prob_weight = _normalize_causal_weights(
+        args.causal_av_weight, args.causal_prob_weight
+    )
 
     cache_path = Path(args.cache)
     rows = json.loads(cache_path.read_text())
@@ -204,11 +240,7 @@ def main():
             continue
         per_ds = _per_dataset_metrics(y_val, y_hat, ds_val)
         macro_bal = _macro_bal(per_ds)
-        dfdc_bal = per_ds.get("DFDC", {}).get("bal_acc", 0.0)
-        if args.optimize == "dfdc":
-            key = (dfdc_bal, macro_bal, overall["bal_acc"], overall["f1"])
-        else:
-            key = (macro_bal, overall["bal_acc"], overall["f1"])
+        key = (macro_bal, overall["bal_acc"], overall["f1"])
         if best is None or key > best["key"]:
             best = {
                 "key": key,
@@ -216,7 +248,6 @@ def main():
                 "overall": overall,
                 "per_dataset": per_ds,
                 "macro_bal_acc": macro_bal,
-                "dfdc_bal_acc": dfdc_bal,
             }
 
     if best is None:
@@ -226,16 +257,15 @@ def main():
         "model": model,
         "feature_names": FEATURE_NAMES,
         "threshold": best["threshold"],
+        "causal_breach_weights": {"av": causal_av_weight, "prob": causal_prob_weight},
         "validation": {
             "n_train": int(len(X_train)),
             "n_val": int(len(X_val)),
             "macro_bal_acc": best["macro_bal_acc"],
-            "dfdc_bal_acc": best.get("dfdc_bal_acc", 0.0),
             "overall": best["overall"],
             "per_dataset": best["per_dataset"],
         },
         "source_cache": str(cache_path.resolve()),
-        "optimize": args.optimize,
     }
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -243,9 +273,13 @@ def main():
 
     print("Saved calibrator:", out_path.resolve())
     print(
+        "Causal breach blend:",
+        f"av={causal_av_weight:.3f}",
+        f"prob={causal_prob_weight:.3f}",
+    )
+    print(
         "Validation:",
         f"macro_bal_acc={best['macro_bal_acc']:.3f}",
-        f"dfdc_bal_acc={best.get('dfdc_bal_acc', 0.0):.3f}",
         f"overall_bal_acc={best['overall']['bal_acc']:.3f}",
         f"overall_f1={best['overall']['f1']:.3f}",
         f"thr={best['threshold']:.3f}",

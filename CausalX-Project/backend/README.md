@@ -14,7 +14,10 @@ Embedding-aware training:
 ```
 
 Threshold tuning (short-term fix only) is controlled by environment variables. Copy
-`backend/.env.example` and override `CFN_PROB_THRESH` / `CFN_RATIO_THRESH` as needed.
+`backend/.env.example` and override `CFN_RATIO_THRESH` as needed. `CFN_PROB_THRESH` can
+still be set manually, but when it is absent the API now defaults to the selection threshold
+stored inside the checkpoint’s `cfn_threshold_report.json` (0.5 for the shipped weights).
+You can also raise `CFN_MIN_SUSPICIOUS_SEGMENT_FRAMES` to ignore very short suspicious bursts before the ratio gate fires.
 
 ## FakeAVCeleb audio-bias mitigation (explicit preprocessing step)
 Before feature extraction, trim the first 100ms from the audio track of all FakeAVCeleb videos.
@@ -38,7 +41,7 @@ TRIM_FAKEAV_AUDIO_HEAD=true ./scripts/run_training_pipeline.sh
 
 ## Retraining the CFN model (recommended for higher accuracy)
 
-The inference pipeline uses a pretrained model from `backend/models/cfn.pth`. For better accuracy on your dataset, retrain using the feature CSV produced by the preprocessing scripts.
+The inference pipeline uses a pretrained model from `backend/models/cfn.pth`. 
 
 ### 1) Prepare the dataset
 Generate the feature dataset:
@@ -49,7 +52,6 @@ python -m src.preprocessing.batch_feature_extractor
 
 This writes `data/processed/causal_multimodal_dataset.csv`.
 
-If you update feature extraction (e.g., new lip/audio statistics), rerun this step to refresh the CSV.
 
 ### 2) Train with efficient techniques
 Run the training script (uses mixed precision on GPU, cosine LR, early stopping, feature standardization, and class imbalance weighting):
@@ -87,7 +89,7 @@ python -m src.training.train_cfn \
 Restart the API server so it reloads the updated weights.
 
 ## Embedding-aware training (TCN + Wav2Vec2)
-If you have generated embedding columns (`tcn_visual_emb`, `wav2vec_audio_emb`) in the CSV,
+If there are generated embedding columns (`tcn_visual_emb`, `wav2vec_audio_emb`) in the CSV,
 train the V2 CFN model with:
 
 ```
@@ -124,7 +126,7 @@ python -m src.preprocessing.batch_feature_extractor
 
 This writes `data/processed/causal_multimodal_dataset.csv`.
 
-If you update feature extraction (e.g., new lip/audio statistics), rerun this step to refresh the CSV.
+If updatde feature extraction (e.g., new lip/audio statistics), rerun this step to refresh the CSV.
 
 ### 2) Train with efficient techniques
 Run the training script (uses mixed precision on GPU, cosine LR, early stopping, feature standardization, and class imbalance weighting):

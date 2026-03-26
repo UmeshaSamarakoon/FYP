@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Upload, Video, AlertTriangle } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Logo } from '@/app/components/Logo';
@@ -12,6 +12,7 @@ interface VideoUploadProps {
 export function VideoUpload({ onAnalyze, isAnalyzing = false, error }: VideoUploadProps) {
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -43,6 +44,12 @@ export function VideoUpload({ onAnalyze, isAnalyzing = false, error }: VideoUplo
     }
   };
 
+  const handleCardClick = () => {
+    if (inputRef.current) {
+      inputRef.current.click();
+    }
+  };
+
   return (
     <div className="min-h-screen relative">
       {/* Logo */}
@@ -59,25 +66,27 @@ export function VideoUpload({ onAnalyze, isAnalyzing = false, error }: VideoUplo
             </p>
           </div>
 
-          <div
-            className={`relative border-2 border-dashed rounded-lg p-16 transition-colors ${
-              dragActive
-                ? 'border-primary bg-primary/5'
-                : 'border-muted-foreground/25 hover:border-muted-foreground/50'
-            }`}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-          >
-            <input
-              type="file"
-              id="video-upload"
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              accept="video/*"
-              onChange={handleChange}
-              disabled={isAnalyzing}
-            />
+            <div
+              className={`relative border-2 border-dashed rounded-lg p-16 transition-colors ${
+                dragActive
+                  ? 'border-primary bg-primary/5'
+                  : 'border-muted-foreground/25 hover:border-muted-foreground/50'
+              }`}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+              onClick={handleCardClick}
+            >
+              <input
+                type="file"
+                id="video-upload"
+                ref={inputRef}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                accept="video/*"
+                onChange={handleChange}
+                disabled={isAnalyzing}
+              />
             
             <div className="flex flex-col items-center gap-6 text-center">
               <div className="p-6 bg-primary/10 rounded-full">

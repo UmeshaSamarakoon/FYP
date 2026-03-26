@@ -44,10 +44,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, "../../"))
 sys.path.append(project_root)
 
-from src.utils.dataset_registry import (
-    get_dfdc_videos,
-    get_fakeavceleb_videos
-)
+from src.utils.dataset_registry import get_fakeavceleb_videos
 from src.cvi.feature_extractor import FeatureExtractor
 
 # --- 2. OUTPUT PATH ---
@@ -894,9 +891,6 @@ def run_multimodal_batch():
     os.makedirs(os.path.dirname(OUTPUT_CSV), exist_ok=True)
 
     videos = []
-    videos.extend(get_dfdc_videos(
-        os.path.join(project_root, "data", "raw", "dfdc")
-    ))
     videos.extend(get_fakeavceleb_videos(
         os.path.join(project_root, "data", "raw", "fakeavceleb")
     ))

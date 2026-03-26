@@ -49,7 +49,7 @@ _AV_FEATURE_ORDER = list(BASELINE_AV_FEATURES) + list(EXTENDED_AV_FEATURES) + [
 ]
 _PHYS_FEATURE_ORDER = list(BASELINE_PHYS_FEATURES) + list(EXTENDED_PHYS_FEATURES)
 _LIP_FEATURE_ORDER = list(LIP_STREAM_FEATURES)
-_DEFAULT_EMB_MODEL_PATH = _MODULE_DIR / "models" / "featup_dfdcplus2_v5_specguard" / "cfn_emb.pth"
+_DEFAULT_EMB_MODEL_PATH = _MODULE_DIR / "models" / "step46_fakeav_robust_constrained_s1337_20260317_031304_fold_02_p2_r01_focal_lr0p0003" / "cfn_emb.pth"
 _DEFAULT_ENSEMBLE_MANIFEST_PATH = _MODULE_DIR / "models" / "fakeavceleb_best_step46_multiseed_manifest.json"
 _T2A_ENABLE = os.getenv("CFN_T2A_ENABLE", "false").lower() == "true"
 _T2A_TARGET_ENTROPY = float(os.getenv("CFN_T2A_TARGET_ENTROPY", "0.58"))
@@ -197,6 +197,64 @@ def _resolve_single_scaler_path(model_path: Path) -> Path:
     if sibling.exists():
         return sibling
     return _MODULE_DIR / "models" / "cfn_scaler.pkl"
+
+
+def _resolve_model_paths_for_threshold() -> list[Path]:
+    """
+    Infer the candidate CFN checkpoint locations used for inference so we can read their threshold reports.
+    Matches the branching logic from _load_artifacts().
+    """
+    # Keep this in sync with `_load_artifacts()` so we know exactly which thresholds are relevant.
+    ensemble_model_paths_raw = os.getenv("CFN_ENSEMBLE_MODEL_PATHS", "").strip()
+    single_model_override = os.getenv("CFN_EMB_MODEL_PATH", "").strip()
+    manifest_path = _resolve_manifest_path(single_model_override=single_model_override)
+
+    if ensemble_model_paths_raw:
+        paths = _split_env_paths(ensemble_model_paths_raw)
+        if not paths:
+            raise RuntimeError("CFN_ENSEMBLE_MODEL_PATHS is set but no valid paths were discovered for threshold lookup.")
+        return paths
+    if manifest_path is not None:
+        model_paths, _ = _load_manifest_artifacts(manifest_path)
+        return model_paths
+    if single_model_override:
+        return [Path(single_model_override)]
+    return [_DEFAULT_EMB_MODEL_PATH]
+
+
+def _load_threshold_from_model_dir(model_path: Path) -> float | None:
+    report_path = model_path.parent / "cfn_threshold_report.json"
+    if not report_path.exists():
+        return None
+    try:
+        payload = json.loads(report_path.read_text())
+    except Exception as exc:  # noqa: BLE001
+        warnings.warn(f"Failed to parse CFN threshold file '{report_path}': {exc}")
+        return None
+    # Read the selected threshold so inference can default to the training decision boundary.
+    chosen = payload.get("chosen_epoch_report") or {}
+    threshold = chosen.get("selection_threshold")
+    if threshold is None:
+        return None
+    try:
+        return float(threshold)
+    except (TypeError, ValueError):
+        return None
+
+
+def resolve_default_probability_threshold() -> float | None:
+    """
+    Return the mean selection threshold recorded next to the checkpoints that will be loaded, if available.
+    """
+    # Averaging thresholds allows multi-checkpoint ensembles (e.g., manifest entries) to share a single default.
+    values = []
+    for model_path in _resolve_model_paths_for_threshold():
+        thr = _load_threshold_from_model_dir(model_path)
+        if thr is not None and np.isfinite(thr):
+            values.append(float(thr))
+    if not values:
+        return None
+    return float(np.mean(values))
 
 
 def _build_model_from_state(state, use_emb):

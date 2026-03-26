@@ -1,7 +1,8 @@
 # src/utils/dataset_registry.py
 
 import os
-import json
+from pathlib import Path
+
 
 # ------------------------------------------------------------------
 # FakeAV-Celeb (Causal Intervention Dataset)
@@ -14,11 +15,28 @@ FAKEAV_LABEL_MAP = {
     "RealVideo-FakeAudio": (1, 0, 1)
 }
 
-def get_fakeavceleb_videos(root_dir):
-    videos = []
+_DEFAULT_DATA_ROOT = Path(__file__).resolve().parents[2] / "data"
+_DEFAULT_RAW_ROOT = _DEFAULT_DATA_ROOT / "raw"
 
+
+def _iter_fakeav_roots(root_dir: Path) -> list[Path]:
+    if not root_dir.exists():
+        return []
+
+    if root_dir.is_dir() and root_dir.name.lower().startswith("fakeavceleb"):
+        return [root_dir]
+
+    candidates = [
+        entry for entry in sorted(root_dir.iterdir())
+        if entry.is_dir() and entry.name.lower().startswith("fakeavceleb")
+    ]
+    return candidates
+
+
+def _collect_from_root(root_dir: Path) -> list[dict]:
+    videos = []
     for scenario, (label, v_fake, a_fake) in FAKEAV_LABEL_MAP.items():
-        scenario_dir = os.path.join(root_dir, scenario)
+        scenario_dir = os.path.join(str(root_dir), scenario)
         if not os.path.isdir(scenario_dir):
             continue
 
@@ -49,69 +67,16 @@ def get_fakeavceleb_videos(root_dir):
                             "audio_fake": a_fake,
                             "dataset": "FakeAVCeleb"
                         })
-
     return videos
 
 
-# ------------------------------------------------------------------
-# DFDC (Real-World Deepfake Dataset)
-# ------------------------------------------------------------------
-
-def _load_dfdc_root(root_dir):
-    metadata_path = os.path.join(root_dir, "metadata.json")
-    if not os.path.exists(metadata_path):
-        return []
-
-    with open(metadata_path, "r") as f:
-        metadata = json.load(f)
-
+def get_fakeavceleb_videos(root_dir):
+    root_path = Path(root_dir)
     videos = []
-    root_name = os.path.basename(os.path.normpath(root_dir))
-    for filename, info in metadata.items():
-        video_path = os.path.join(root_dir, filename)
-        if not os.path.exists(video_path):
-            continue
-
-        # Keep historical IDs for the original sample folder to avoid duplicates.
-        if root_name == "train_sample_videos":
-            video_id = filename
-        else:
-            # Prefix other DFDC parts to avoid collisions across parts.
-            video_id = f"{root_name}__{filename}"
-        videos.append({
-            "video_id": video_id,
-            "path": video_path,
-            "label": 1 if info["label"] == "FAKE" else 0,
-            "dataset": "DFDC",
-            # DFDC does not have modality-level interventions
-            "video_fake": -1,
-            "audio_fake": -1
-        })
+    for candidate in _iter_fakeav_roots(root_path):
+        videos.extend(_collect_from_root(candidate))
     return videos
 
 
-def get_dfdc_videos(data_root):
-    """
-    Loads DFDC videos from one root or from multiple part-folders.
-
-    Supports:
-    - direct folder containing metadata.json
-    - parent folder containing multiple immediate child folders, each with metadata.json
-    """
-    if not os.path.isdir(data_root):
-        raise FileNotFoundError(f"DFDC root not found: {data_root}")
-
-    direct = _load_dfdc_root(data_root)
-    if direct:
-        return direct
-
-    videos = []
-    for name in sorted(os.listdir(data_root)):
-        subdir = os.path.join(data_root, name)
-        if not os.path.isdir(subdir):
-            continue
-        videos.extend(_load_dfdc_root(subdir))
-
-    if not videos:
-        raise FileNotFoundError(f"No metadata.json found under {data_root}")
-    return videos
+def get_default_fakeav_root() -> str:
+    return str(_DEFAULT_RAW_ROOT)

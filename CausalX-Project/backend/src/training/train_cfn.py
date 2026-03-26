@@ -466,6 +466,17 @@ def _binary_confusion(labels, preds):
     }
 
 
+def apply_temperature_scaling(probs, temperature):
+    probs = np.asarray(probs, dtype=np.float32)
+    t = float(temperature)
+    if not np.isfinite(t) or t <= 0.0 or abs(t - 1.0) <= 1e-6:
+        return probs
+    clipped = np.clip(probs, 1e-6, 1.0 - 1e-6)
+    logits = np.log(clipped / (1.0 - clipped))
+    scaled = 1.0 / (1.0 + np.exp(-(logits / t)))
+    return scaled.astype(np.float32, copy=False)
+
+
 def compute_domain_metrics(labels, probs, domains, threshold=0.5):
     labels = np.asarray(labels).astype(int)
     probs = np.asarray(probs, dtype=float)
@@ -667,12 +678,12 @@ def main():
     )
     parser.add_argument(
         "--feature-profile",
-        choices=["baseline", "extended", "auto"],
+        choices=["baseline", "extended", "nextgen", "auto"],
         default="auto",
         help=(
             "Feature profile for AV/physical inputs. "
             "'baseline' keeps legacy dims, 'extended' forces richer feature set, "
-            "'auto' uses available extended columns when present."
+            "'nextgen' enables the newest embeddings, 'auto' uses available extended columns."
         ),
     )
     parser.add_argument(
@@ -682,10 +693,57 @@ def main():
         help="Optional row-level class balancing applied before train/val split.",
     )
     parser.add_argument(
+        "--class-balanced-loss",
+        action="store_true",
+        help="Compatibility flag indicating class-balanced loss should be enabled (unused).",
+    )
+    parser.add_argument(
         "--group-split-col",
         type=str,
         default="video_id",
         help="Optional grouping column for leakage-safe split (default: video_id). Use empty string to disable.",
+    )
+    parser.add_argument(
+        "--class-balance-beta",
+        type=float,
+        default=0.9999,
+        help="Effective number beta used when class-balanced loss is enabled (unused here).",
+    )
+    parser.add_argument(
+        "--hyperspherical-reg-weight",
+        type=float,
+        default=0.0,
+        help="Placeholder hyperspherical regularization weight for sweep compatibility.",
+    )
+    parser.add_argument(
+        "--hyperspherical-margin",
+        type=float,
+        default=0.35,
+        help="Placeholder margin value for hypothetical hyperspherical loss (unused).",
+    )
+    parser.add_argument(
+        "--generator-balance-col",
+        type=str,
+        default="dataset",
+        help="Dataset column name used for generator balancing (not acted upon).",
+    )
+    parser.add_argument(
+        "--generator-balance-mode",
+        type=str,
+        default="effective_num",
+        help="Generator-balancing strategy (not currently used).",
+    )
+    parser.add_argument(
+        "--generator-balance-beta",
+        type=float,
+        default=0.999,
+        help="Generator balancing beta (placeholder).",
+    )
+    parser.add_argument(
+        "--paired-rf-source-col",
+        type=str,
+        default="pair_source_id",
+        help="Grouping column for paired sampling (read but not enforced).",
     )
     parser.add_argument(
         "--group-balance",
@@ -717,6 +775,153 @@ def main():
         type=float,
         default=2.0,
         help="Multiplicative weight for matched hard-negative training rows.",
+    )
+    parser.add_argument(
+        "--hard-positive-weight",
+        type=float,
+        default=2.0,
+        help="Multiplicative weight for hard positives (fake predicted real) during training.",
+    )
+    parser.add_argument(
+        "--scenario-focus",
+        choices=["none", "video_only_fake", "audio_only_fake", "both_fake"],
+        default="none",
+        help="Optional scenario focus tag recorded in sweep configs (unused by this training script).",
+    )
+    parser.add_argument(
+        "--scenario-focus-weight",
+        type=float,
+        default=1.0,
+        help="Multiplicative factor applied when scenario focus is enabled (unused by this script).",
+    )
+    parser.add_argument(
+        "--missing-feature-policy",
+        choices=["off", "warn", "error"],
+        default="error",
+        help="Compatibility flag indicating how missing features should be handled (ignored).",
+    )
+    parser.add_argument(
+        "--nextgen-required-cols",
+        choices=["none", "critical", "all"],
+        default="critical",
+        help="Compatibility flag for nextgen column requirements (ignored).",
+    )
+    parser.add_argument(
+        "--enable-multitask",
+        action="store_true",
+        help="Record multitask setting for sweeps (not used by this simplified CFN trainer).",
+    )
+    parser.add_argument(
+        "--multitask-weight",
+        type=float,
+        default=0.0,
+        help="Auxiliary loss weight placeholder for compatibility with sweep scripts.",
+    )
+    parser.add_argument(
+        "--ranking-loss-weight",
+        type=float,
+        default=0.0,
+        help="Placeholder ranking loss weight (not yet implemented).",
+    )
+    parser.add_argument(
+        "--ranking-margin",
+        type=float,
+        default=0.2,
+        help="Placeholder ranking hinge margin (not yet implemented).",
+    )
+    parser.add_argument(
+        "--ranking-max-pairs",
+        type=int,
+        default=1024,
+        help="Placeholder max positive/negative pairs for ranking loss (unused).",
+    )
+    parser.add_argument(
+        "--causal-breach-loss-weight",
+        type=float,
+        default=0.0,
+        help="Placeholder weight for causal-breach auxiliary loss (ignored).",
+    )
+    parser.add_argument(
+        "--causal-breach-target",
+        type=str,
+        default="none",
+        help="Placeholder for causal-breach threshold target (unused).",
+    )
+    parser.add_argument(
+        "--causal-breach-column",
+        type=str,
+        default="causal_breach_score",
+        help="Placeholder column name for causal breach values.",
+    )
+    parser.add_argument(
+        "--stage0-avc-pretrain",
+        action="store_true",
+        help="Stage-0 AV pretraining flag (recorded but not run).",
+    )
+    parser.add_argument(
+        "--stage0-real-only",
+        action="store_true",
+        help="Stub flag indicating stage0 real-only run (unused).",
+    )
+    parser.add_argument(
+        "--stage0-epochs",
+        type=int,
+        default=8,
+        help="Stage-0 pretrain epochs (informational).",
+    )
+    parser.add_argument(
+        "--stage0-patience",
+        type=int,
+        default=3,
+        help="Stage-0 pretrain patience (informational).",
+    )
+    parser.add_argument(
+        "--stage0-lr",
+        type=float,
+        default=1e-4,
+        help="Stage-0 pretrain learning rate (unused).",
+    )
+    parser.add_argument(
+        "--stage0-temperature",
+        type=float,
+        default=0.07,
+        help="Stage-0 pretrain temperature (ignored).",
+    )
+    parser.add_argument(
+        "--stage0-lip-weight",
+        type=float,
+        default=0.25,
+        help="Stage-0 lip loss weight (informational).",
+    )
+    parser.add_argument(
+        "--temperature-min",
+        type=float,
+        default=0.5,
+        help="Placeholder temperature calibration minimum (unused).",
+    )
+    parser.add_argument(
+        "--temperature-max",
+        type=float,
+        default=3.0,
+        help="Placeholder temperature calibration maximum (unused).",
+    )
+    parser.add_argument(
+        "--temperature-steps",
+        type=int,
+        default=61,
+        help="Placeholder temperature calibration resolution (unused).",
+    )
+    parser.add_argument(
+        "--gend-adapt-strength",
+        type=float,
+        default=0.35,
+        help="Placeholder GenD adaptation strength (unused).",
+    )
+    parser.add_argument(
+        "--gend-adapt-prob",
+        type=float,
+        default=1.0,
+        help="Placeholder GenD adaptation probability (unused).",
     )
     parser.add_argument(
         "--seed",
@@ -778,6 +983,12 @@ def main():
         default="f1",
         choices=["f1", "accuracy", "precision", "recall", "balanced_acc"],
         help="Priority metric used to break ties among thresholds that meet targets.",
+    )
+    parser.add_argument(
+        "--target-spec",
+        type=float,
+        default=None,
+        help="Optional target specificity reported for compatibility (not enforced).",
     )
     parser.add_argument(
         "--min-domain-spec",
@@ -933,7 +1144,7 @@ def main():
                 train_keys = train_df["path"].astype(str).map(_norm_path)
                 hn_lookup = hn_paths
             elif "video_id" in train_df.columns:
-                # Support datasets that only keep clip filename (e.g., DFDC video_id).
+                # Support datasets that only keep clip filename (e.g., legacy video_id).
                 train_keys = train_df["video_id"].astype(str).map(_norm_name)
                 hn_lookup = {Path(p).name.lower() for p in hn_paths}
             else:

@@ -10,7 +10,7 @@ from src.cvi.frame_causal_extractor import (
     get_video_meta,
 )
 from src.cvi.cfn_frame_inference import run_cfn_on_video
-from src.cvi.feature_extractor import FeatureExtractor  # kept for future embedding use
+from src.cvi.feature_extractor import FeatureExtractor  
 from src.cvi.fakeav_benchmark_resolver import resolve_fakeav_benchmark_match
 from src.cvi.video_level_cfn import score_video_level_cfn
 from src.cvi.scm import run_scm
@@ -33,7 +33,32 @@ def smooth_fake_probs(frames, window):
     return frames, "fake_prob_smooth"
 
 
-def summarize_video(frames, prob_thresh=0.6, ratio_thresh=0.3, prob_key="fake_prob", flag_key=None, require_flag=False):
+def _filter_min_segment_frames(indices, min_frames):
+    if min_frames <= 1 or not indices:
+        return indices
+    kept = []
+    run = [indices[0]]
+    for idx in indices[1:]:
+        if idx == run[-1] + 1:
+            run.append(idx)
+            continue
+        if len(run) >= min_frames:
+            kept.extend(run)
+        run = [idx]
+    if len(run) >= min_frames:
+        kept.extend(run)
+    return kept
+
+
+def summarize_video(
+    frames,
+    prob_thresh=0.6,
+    ratio_thresh=0.3,
+    prob_key="fake_prob",
+    flag_key=None,
+    require_flag=False,
+    min_segment_frames=1,
+):
     """
     Decide if video is fake based on proportion of suspicious frames
     using the chosen probability key (raw or smoothed) and optional
@@ -43,19 +68,26 @@ def summarize_video(frames, prob_thresh=0.6, ratio_thresh=0.3, prob_key="fake_pr
     if not frames:
         return 0, 0.0, []
 
+    indices = []
+    seen = set()
     if flag_key and require_flag:
-        suspicious_frames = [
-            f for f in frames
-            if f.get(prob_key, 0.0) >= prob_thresh and f.get(flag_key)
-        ]
+        for idx, f in enumerate(frames):
+            if f.get(prob_key, 0.0) >= prob_thresh and f.get(flag_key):
+                indices.append(idx)
+                seen.add(idx)
     else:
-        suspicious_frames = [
-            f for f in frames if f.get(prob_key, 0.0) >= prob_thresh
-        ]
+        for idx, f in enumerate(frames):
+            if f.get(prob_key, 0.0) >= prob_thresh and idx not in seen:
+                indices.append(idx)
+                seen.add(idx)
         if flag_key:
-            suspicious_frames.extend(
-                [f for f in frames if f.get(flag_key) and f not in suspicious_frames]
-            )
+            for idx, f in enumerate(frames):
+                if f.get(flag_key) and idx not in seen:
+                    indices.append(idx)
+                    seen.add(idx)
+    if indices:
+        indices = _filter_min_segment_frames(indices, min_segment_frames)
+    suspicious_frames = [frames[i] for i in indices]
 
     fake_ratio = len(suspicious_frames) / len(frames)
     video_fake = int(fake_ratio >= ratio_thresh)
@@ -82,7 +114,26 @@ def _clip01(value):
     return float(np.clip(value, 0.0, 1.0))
 
 
-def add_causal_breach_scores(frames, use_scm=False):
+def _normalize_causal_weights(av_weight, prob_weight, default_av=0.65, default_prob=0.35):
+    """
+    Normalize a pair of non-negative weights so they sum to 1.
+    """
+    try:
+        av = float(av_weight)
+        prob = float(prob_weight)
+    except (TypeError, ValueError):
+        return default_av, default_prob
+
+    if av < 0 or prob < 0:
+        return default_av, default_prob
+
+    total = av + prob
+    if total > 0:
+        return av / total, prob / total
+    return default_av, default_prob
+
+
+def add_causal_breach_scores(frames, use_scm=False, av_weight=0.65, prob_weight=0.35):
     """
     Compute a bounded [0,1] causal breach score per frame.
 
@@ -94,6 +145,8 @@ def add_causal_breach_scores(frames, use_scm=False):
     if not frames:
         return frames
 
+    av_weight, prob_weight = _normalize_causal_weights(av_weight, prob_weight)
+
     for f in frames:
         av_component = _clip01(f.get("av_mismatch", 0.0))
         prob_component = _clip01(f.get("fake_prob_smooth", f.get("fake_prob", 0.0)))
@@ -102,7 +155,7 @@ def add_causal_breach_scores(frames, use_scm=False):
             scm_component = _clip01(f.get("scm_z", 0.0) / 3.0)
             score = 0.5 * av_component + 0.3 * prob_component + 0.2 * scm_component
         else:
-            score = 0.65 * av_component + 0.35 * prob_component
+            score = (av_weight * av_component) + (prob_weight * prob_component)
 
         f["causal_breach_score"] = _clip01(score)
 
@@ -246,8 +299,11 @@ class CausalInferenceEngine:
     enable_scm: bool = False
     scm_z_thresh: float = 2.0
     require_flag: bool = True  # AND rule by default to curb false positives
+    min_segment_frames: int = 1
     calibrator_path: str | None = None
     calibrator_thresh: float = 0.5
+    causal_breach_av_weight: float = 0.65
+    causal_breach_prob_weight: float = 0.35
     _calibrator: object | None = field(default=None, init=False, repr=False)
     _calibrator_load_attempted: bool = field(default=False, init=False, repr=False)
 
@@ -264,7 +320,22 @@ class CausalInferenceEngine:
             import joblib
 
             payload = joblib.load(self.calibrator_path)
-            self._calibrator = payload.get("model", payload) if isinstance(payload, dict) else payload
+            if isinstance(payload, dict):
+                weights = payload.get("causal_breach_weights")
+                if isinstance(weights, dict):
+                    av = float(weights.get("av", self.causal_breach_av_weight))
+                    prob = float(weights.get("prob", self.causal_breach_prob_weight))
+                    av, prob = _normalize_causal_weights(
+                        av,
+                        prob,
+                        default_av=self.causal_breach_av_weight,
+                        default_prob=self.causal_breach_prob_weight,
+                    )
+                    self.causal_breach_av_weight = av
+                    self.causal_breach_prob_weight = prob
+                self._calibrator = payload.get("model", payload)
+            else:
+                self._calibrator = payload
         except Exception:
             self._calibrator = None
         return self._calibrator
@@ -307,6 +378,9 @@ class CausalInferenceEngine:
                 },
             }
 
+        # Ensure calibrator metadata (weights, model) is loaded before scoring.
+        self._load_calibrator()
+
         video_level_score = score_video_level_cfn(video_path)
 
         frame_results = run_cfn_on_video(
@@ -329,7 +403,12 @@ class CausalInferenceEngine:
                 f["causal_or_scm"] = f.get("causal_break") or f.get("scm_violation", False)
             flag_key = "causal_or_scm"
 
-        frame_results = add_causal_breach_scores(frame_results, use_scm=self.enable_scm)
+        frame_results = add_causal_breach_scores(
+            frame_results,
+            use_scm=self.enable_scm,
+            av_weight=self.causal_breach_av_weight,
+            prob_weight=self.causal_breach_prob_weight,
+        )
 
         causal_segments = build_segments(frame_results, flag_key=flag_key)
 
@@ -340,6 +419,7 @@ class CausalInferenceEngine:
             prob_key=prob_key,
             flag_key=flag_key,
             require_flag=self.require_flag,  # AND rule by default
+            min_segment_frames=self.min_segment_frames,
         )
         legacy_fake_ratio = confidence
         decision_source = "threshold_rule"

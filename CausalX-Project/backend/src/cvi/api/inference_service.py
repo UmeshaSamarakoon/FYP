@@ -1,4 +1,7 @@
+import math
 import os
+
+from src.cvi.cfn_frame_inference import resolve_default_probability_threshold
 from src.cvi.pipeline import (
     CausalInferenceEngine,
     InferenceController,
@@ -16,7 +19,29 @@ def _safe_float(value, default):
     except (TypeError, ValueError):
         return default
 
-PROB_THRESH = float(os.getenv("CFN_PROB_THRESH", "0.247707"))
+def _safe_int(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+def _resolve_prob_thresh():
+    env_val = os.getenv("CFN_PROB_THRESH", "").strip()
+    if env_val:
+        try:
+            val = float(env_val)
+            if math.isfinite(val):
+                return val
+        except (TypeError, ValueError):
+            pass
+    inferred = resolve_default_probability_threshold()
+    if inferred is not None and math.isfinite(inferred):
+        return float(inferred)
+    # Fall back to the legacy default when nothing better can be inferred.
+    return 0.247707
+
+
+PROB_THRESH = _resolve_prob_thresh()
 RATIO_THRESH = float(os.getenv("CFN_RATIO_THRESH", "0.60"))
 SMOOTH_WINDOW = int(os.getenv("CFN_SMOOTH_WINDOW", "5"))
 CHUNK_SECONDS = int(os.getenv("CFN_CHUNK_SECONDS", "10"))
@@ -41,6 +66,7 @@ T2A_ENABLE = os.getenv("CFN_T2A_ENABLE", "false").lower() == "true"
 T2A_TARGET_ENTROPY = float(os.getenv("CFN_T2A_TARGET_ENTROPY", "0.58"))
 T2A_MAX_TEMP = float(os.getenv("CFN_T2A_MAX_TEMP", "2.5"))
 T2A_MIN_FRAMES = int(os.getenv("CFN_T2A_MIN_FRAMES", "24"))
+MIN_SUSPICIOUS_SEGMENT_FRAMES = max(1, _safe_int(os.getenv("CFN_MIN_SUSPICIOUS_SEGMENT_FRAMES"), 3))
 
 def build_inference_controller() -> InferenceController:
     engine = CausalInferenceEngine(
@@ -55,6 +81,7 @@ def build_inference_controller() -> InferenceController:
         enable_scm=ENABLE_SCM_CHECKS,
         scm_z_thresh=SCM_Z_THRESH,
         require_flag=REQUIRE_FLAG,
+        min_segment_frames=MIN_SUSPICIOUS_SEGMENT_FRAMES,
         calibrator_path=VIDEO_CALIBRATOR_PATH,
         calibrator_thresh=CALIBRATOR_THRESH,
     )
