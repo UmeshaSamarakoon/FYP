@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { Upload, Video, AlertTriangle } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Logo } from '@/app/components/Logo';
@@ -12,7 +12,12 @@ interface VideoUploadProps {
 export function VideoUpload({ onAnalyze, isAnalyzing = false, error }: VideoUploadProps) {
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+
+  const selectFile = useCallback((file: File | null | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith('video/')) return;
+    setSelectedFile(file);
+  }, []);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -28,26 +33,13 @@ export function VideoUpload({ onAnalyze, isAnalyzing = false, error }: VideoUplo
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      if (file.type.startsWith('video/')) {
-        setSelectedFile(file);
-      }
-    }
-  }, []);
+    selectFile(e.dataTransfer.files?.[0]);
+  }, [selectFile]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
-    }
-  };
-
-  const handleCardClick = () => {
-    if (inputRef.current) {
-      inputRef.current.click();
-    }
+    selectFile(e.target.files?.[0]);
+    // Allow choosing the same file again after a reset or failed analysis.
+    e.target.value = '';
   };
 
   return (
@@ -76,14 +68,15 @@ export function VideoUpload({ onAnalyze, isAnalyzing = false, error }: VideoUplo
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
-              onClick={handleCardClick}
             >
               <input
                 type="file"
                 id="video-upload"
-                ref={inputRef}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 accept="video/*"
+                onClick={(e) => {
+                  e.currentTarget.value = '';
+                }}
                 onChange={handleChange}
                 disabled={isAnalyzing}
               />
