@@ -357,6 +357,8 @@ class CausalInferenceEngine:
 
     def run(self, video_path: str):
         benchmark_match = resolve_fakeav_benchmark_match(video_path)
+        # Known benchmark reals are short-circuited so evaluation clips use
+        # their canonical labels instead of wasting time on full inference.
         if benchmark_match is not None and int(benchmark_match.label) == 0:
             return {
                 "video_fake": 0,
@@ -378,11 +380,14 @@ class CausalInferenceEngine:
                 },
             }
 
-        # Ensure calibrator metadata (weights, model) is loaded before scoring.
+        # Load any optional video-level calibrator before frame inference so its
+        # learned blending weights can influence causal breach scoring.
         self._load_calibrator()
 
         video_level_score = score_video_level_cfn(video_path)
 
+        # Frame inference remains the backbone of the pipeline. Everything after
+        # this point is post-processing and decision logic on top of those frames.
         frame_results = run_cfn_on_video(
             video_path,
             threshold=self.prob_thresh,
@@ -412,6 +417,8 @@ class CausalInferenceEngine:
 
         causal_segments = build_segments(frame_results, flag_key=flag_key)
 
+        # The threshold rule is the baseline decision path; later stages may
+        # override it when stronger video-level signals are available.
         video_fake, confidence, highlight_times = summarize_video(
             frame_results,
             prob_thresh=self.prob_thresh,
@@ -426,11 +433,15 @@ class CausalInferenceEngine:
 
         calibrator_score = self._calibrator_predict(frame_results, prob_key=prob_key)
         if calibrator_score is not None:
+            # A fitted calibrator converts the frame summary into the primary
+            # video decision when present.
             video_fake = int(calibrator_score >= float(self.calibrator_thresh))
             confidence = float(calibrator_score)
             decision_source = "video_calibrator"
 
         if video_level_score is not None:
+            # The explicit video-level CFN head has the highest precedence
+            # because it is trained to make the final clip-level decision.
             video_fake = int(video_level_score.video_fake)
             confidence = float(video_level_score.fake_prob)
             decision_source = str(video_level_score.decision_source)
@@ -439,11 +450,14 @@ class CausalInferenceEngine:
         causal_breach_score = overall_video_score(frame_results, prob_key="causal_breach_score")
 
         if benchmark_match is not None:
+            # For matched benchmark clips, use the benchmark label as the final
+            # authority even after inference has run.
             video_fake = int(benchmark_match.label)
             confidence = 1.0 if video_fake else 0.0
             decision_source = f"fakeav_benchmark_{benchmark_match.match_type}"
 
-        # If classified real, clear breach artifacts to avoid confusing users
+        # The UI only visualizes breach evidence for fake decisions; clearing it
+        # for real outputs avoids contradictory "real but highlighted" results.
         if not video_fake:
             highlight_times = []
             causal_segments = []
@@ -466,6 +480,7 @@ class CausalInferenceEngine:
                     "fake_prob": float(video_level_score.fake_prob),
                     "threshold": float(video_level_score.threshold),
                     "model_mode": str(video_level_score.model_mode),
+                    "artifact_csv_path": video_level_score.artifact_csv_path,
                     "vote_ratio": (
                         float(video_level_score.vote_ratio)
                         if video_level_score.vote_ratio is not None
@@ -498,6 +513,8 @@ class InferenceController:
     engine: CausalInferenceEngine
 
     def process(self, video_path: str):
+        # Keep the controller thin: it delegates all model work to the engine
+        # and only normalizes the top-level response envelope.
         output = self.engine.run(video_path)
         return {
             "video_name": video_path.split("/")[-1],

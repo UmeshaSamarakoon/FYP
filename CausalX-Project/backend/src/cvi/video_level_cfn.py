@@ -9,20 +9,26 @@ from pathlib import Path
 
 import joblib
 import numpy as np
+import pandas as pd
 import torch
 
-from src.cvi.cfn_frame_inference import (
-    _AV_FEATURE_ORDER,
-    _PHYS_FEATURE_ORDER,
-    _apply_temperature_scale,
-    _prepare_features_for_model,
+from src.cvi.runtimeparity_temporal import read_runtimeparity_temporal_artifact, write_runtimeparity_temporal_artifact
+from src.cvi.step46_precompute import (
+    STEP46_AV_COLUMNS,
+    STEP46_PHYS_COLUMNS,
+    normalize_step46_row,
+    read_step46_artifact,
+    write_step46_artifact,
 )
 from src.modules.causal_fusion import CausalFusionNetworkV2
+from src.modules.runtimeparity_temporal_model import RuntimeParityTemporalScorer
 from src.preprocessing.batch_feature_extractor import extract_causal_features
 
 
 _MODULE_DIR = Path(__file__).resolve().parents[2]
 _DEFAULT_MANIFEST_PATH = _MODULE_DIR / "models" / "fakeavceleb_best_step46_multiseed_manifest.json"
+_DEFAULT_RUNTIME_CALIBRATION_PATH = _MODULE_DIR / "models" / "fakeavceleb_best_step46_runtime_calibration.json"
+_DEFAULT_TABULAR_SCORER_PATH = _MODULE_DIR / "models" / "fakeavceleb_runtimeparity_plus_balanced_tabular.joblib"
 _DEVICE = torch.device("cpu")
 
 
@@ -33,6 +39,7 @@ class VideoLevelScore:
     threshold: float
     decision_source: str
     model_mode: str
+    artifact_csv_path: str | None = None
     vote_ratio: float | None = None
     fold_scores: dict[str, float] | None = None
     fold_thresholds: dict[str, float] | None = None
@@ -44,6 +51,22 @@ class _ModelBundle:
     scaler_path: str | None
     threshold: float | None
     temperature: float
+
+
+@dataclass(frozen=True)
+class _TabularBundle:
+    scorer_path: str
+    feature_columns: tuple[str, ...]
+    threshold: float
+    model_name: str
+
+
+@dataclass(frozen=True)
+class _TemporalBundle:
+    scorer_path: str
+    feature_columns: tuple[str, ...]
+    threshold: float
+    model_name: str
 
 
 def _safe_float(value, default=0.0) -> float:
@@ -87,14 +110,36 @@ def _load_temperature_from_model_dir(model_dir: Path) -> float:
     return max(_safe_float(obj.get("temperature", 1.0), default=1.0), 1e-4)
 
 
+def _resolve_tabular_scorer_path() -> Path | None:
+    explicit = os.getenv("CFN_VIDEO_LEVEL_TABULAR_SCORER_PATH", "").strip()
+    if explicit:
+        p = Path(explicit).expanduser()
+        return p if p.exists() else None
+    allow_default_raw = os.getenv("CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR", "").strip().lower()
+    if allow_default_raw in {"0", "false", "no", "off"}:
+        return None
+    allow_default = allow_default_raw in {"", "1", "true", "yes", "on"}
+    if allow_default and _DEFAULT_TABULAR_SCORER_PATH.exists():
+        return _DEFAULT_TABULAR_SCORER_PATH
+    return None
+
+
+def _resolve_temporal_scorer_path() -> Path | None:
+    explicit = os.getenv("CFN_VIDEO_LEVEL_TEMPORAL_SCORER_PATH", "").strip()
+    if not explicit:
+        return None
+    p = Path(explicit).expanduser()
+    return p if p.exists() else None
+
+
 @lru_cache(maxsize=None)
 def _load_model(model_path_str: str):
     model_path = Path(model_path_str)
     state = torch.load(model_path, map_location=_DEVICE)
     av_weight = state.get("av_branch.0.weight")
     phys_weight = state.get("physical_branch.0.weight")
-    av_dim = int(av_weight.shape[1]) if isinstance(av_weight, torch.Tensor) and av_weight.ndim >= 2 else len(_AV_FEATURE_ORDER)
-    phys_dim = int(phys_weight.shape[1]) if isinstance(phys_weight, torch.Tensor) and phys_weight.ndim >= 2 else len(_PHYS_FEATURE_ORDER)
+    av_dim = int(av_weight.shape[1]) if isinstance(av_weight, torch.Tensor) and av_weight.ndim >= 2 else len(STEP46_AV_COLUMNS)
+    phys_dim = int(phys_weight.shape[1]) if isinstance(phys_weight, torch.Tensor) and phys_weight.ndim >= 2 else len(STEP46_PHYS_COLUMNS)
     model = CausalFusionNetworkV2(
         av_dim=av_dim,
         phys_dim=phys_dim,
@@ -115,11 +160,81 @@ def _load_scaler(scaler_path_str: str | None):
     return joblib.load(scaler_path)
 
 
+@lru_cache(maxsize=1)
+def _load_tabular_scorer():
+    scorer_path = _resolve_tabular_scorer_path()
+    if scorer_path is None:
+        return None
+    try:
+        payload = joblib.load(scorer_path)
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    model = payload.get("model")
+    feature_columns = payload.get("feature_columns")
+    if model is None or not isinstance(feature_columns, (list, tuple)) or not feature_columns:
+        return None
+    threshold = _safe_float(payload.get("threshold", 0.5), default=0.5)
+    model_name = str(payload.get("model_name", "tabular")).strip() or "tabular"
+    return {
+        "bundle": _TabularBundle(
+            scorer_path=str(scorer_path.resolve()),
+            feature_columns=tuple(str(c) for c in feature_columns),
+            threshold=float(threshold),
+            model_name=model_name,
+        ),
+        "model": model,
+    }
+
+
+@lru_cache(maxsize=1)
+def _load_temporal_scorer():
+    scorer_path = _resolve_temporal_scorer_path()
+    if scorer_path is None:
+        return None
+    try:
+        payload = torch.load(scorer_path, map_location=_DEVICE, weights_only=False)
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    feature_columns = payload.get("feature_columns")
+    model_config = payload.get("model_config")
+    state = payload.get("model_state_dict")
+    if not isinstance(feature_columns, list) or not isinstance(model_config, dict) or not isinstance(state, dict):
+        return None
+    try:
+        model = RuntimeParityTemporalScorer(
+            input_dim=int(model_config.get("input_dim", len(feature_columns))),
+            channels=tuple(int(v) for v in model_config.get("channels", [32, 32])),
+            dropout=float(model_config.get("dropout", 0.2)),
+        ).to(_DEVICE)
+        model.load_state_dict(state)
+        model.eval()
+    except Exception:
+        return None
+    threshold = _safe_float(payload.get("threshold", 0.5), default=0.5)
+    return {
+        "bundle": _TemporalBundle(
+            scorer_path=str(scorer_path.resolve()),
+            feature_columns=tuple(str(c) for c in feature_columns),
+            threshold=float(threshold),
+            model_name="runtimeparity_temporal",
+        ),
+        "model": model,
+        "mean": np.asarray(payload.get("normalization_mean", []), dtype=np.float32),
+        "std": np.asarray(payload.get("normalization_std", []), dtype=np.float32),
+    }
+
+
 def _score_bundle(bundle: _ModelBundle, feature_map: dict[str, object]) -> float | None:
+    from src.cvi.cfn_frame_inference import _apply_temperature_scale, _prepare_features_for_model
+
     model, av_dim, phys_dim = _load_model(bundle.model_path)
     scaler = _load_scaler(bundle.scaler_path)
-    base_av = _ordered_feature_values(feature_map, _AV_FEATURE_ORDER)
-    base_phys = _ordered_feature_values(feature_map, _PHYS_FEATURE_ORDER)
+    base_av = _ordered_feature_values(feature_map, STEP46_AV_COLUMNS)
+    base_phys = _ordered_feature_values(feature_map, STEP46_PHYS_COLUMNS)
     av_features, phys_features, _ = _prepare_features_for_model(
         base_av,
         base_phys,
@@ -140,12 +255,45 @@ def _score_bundle(bundle: _ModelBundle, feature_map: dict[str, object]) -> float
     return _safe_float(prob, default=0.0)
 
 
+def _score_tabular_bundle(bundle: _TabularBundle, feature_map: dict[str, object]) -> float | None:
+    payload = _load_tabular_scorer()
+    if payload is None:
+        return None
+    model = payload.get("model")
+    if model is None:
+        return None
+    values = pd.DataFrame(
+        [
+            {
+                col: _safe_float(feature_map.get(col, 0.0), default=0.0)
+                for col in bundle.feature_columns
+            }
+        ],
+        columns=list(bundle.feature_columns),
+        dtype=np.float32,
+    )
+    try:
+        if hasattr(model, "predict_proba"):
+            prob = float(model.predict_proba(values)[0, 1])
+        elif hasattr(model, "decision_function"):
+            margin = float(model.decision_function(values)[0])
+            prob = float(1.0 / (1.0 + np.exp(-margin)))
+        else:
+            return None
+    except Exception:
+        return None
+    return _safe_float(prob, default=0.0)
+
+
 def _resolve_manifest_path() -> Path | None:
     explicit = os.getenv("CFN_VIDEO_LEVEL_ENSEMBLE_MANIFEST_PATH", "").strip()
     if explicit:
         p = Path(explicit).expanduser()
         return p if p.exists() else None
-    allow_default = os.getenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", "false").strip().lower() == "true"
+    allow_default_raw = os.getenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", "").strip().lower()
+    if allow_default_raw in {"0", "false", "no", "off"}:
+        return None
+    allow_default = allow_default_raw in {"", "1", "true", "yes", "on"}
     if allow_default and _DEFAULT_MANIFEST_PATH.exists():
         return _DEFAULT_MANIFEST_PATH
     return None
@@ -176,6 +324,35 @@ def _bundle_from_model_dir(model_dir: Path, threshold_override: float | None = N
         threshold=threshold,
         temperature=_load_temperature_from_model_dir(model_dir),
     )
+
+
+@lru_cache(maxsize=1)
+def _load_runtime_calibration():
+    explicit = os.getenv("CFN_VIDEO_LEVEL_RUNTIME_CALIBRATION_JSON", "").strip()
+    if explicit:
+        calibration_path = Path(explicit).expanduser()
+    else:
+        calibration_path = _DEFAULT_RUNTIME_CALIBRATION_PATH
+    if not calibration_path.exists():
+        return None
+
+    try:
+        payload = json.loads(calibration_path.read_text())
+    except Exception:
+        return None
+
+    threshold = payload.get("ensemble_threshold")
+    if threshold is None:
+        return None
+    mode = str(payload.get("threshold_mode", "mean_prob")).strip().lower()
+    if mode != "mean_prob":
+        return None
+    return {
+        "path": str(calibration_path),
+        "threshold_mode": mode,
+        "ensemble_threshold": _safe_float(threshold, default=0.5),
+        "source_manifest": str(payload.get("source_manifest", "")).strip(),
+    }
 
 
 @lru_cache(maxsize=1)
@@ -285,18 +462,57 @@ def _mean_threshold(bundles: list[_ModelBundle], default: float = 0.5) -> float:
     return float(np.mean(vals))
 
 
-def score_video_level_cfn(video_path: str | os.PathLike[str]) -> VideoLevelScore | None:
+def _resolve_precompute_dir() -> Path | None:
+    explicit = os.getenv("CFN_VIDEO_LEVEL_PRECOMPUTE_DIR", "").strip()
+    if not explicit:
+        return None
+    return Path(explicit).expanduser()
+
+
+def _has_video_level_scorer() -> bool:
+    if _load_temporal_scorer() is not None:
+        return True
+    if _load_tabular_scorer() is not None:
+        return True
+    if _load_selection_bundle() is not None:
+        return True
+    if _resolve_single_model_dir() is not None:
+        return True
+    return _load_manifest_spec() is not None
+
+
+def _score_video_level_feature_map(
+    feature_map: dict[str, object],
+    *,
+    artifact_csv_path: str | None = None,
+) -> VideoLevelScore | None:
+    tabular_payload = _load_tabular_scorer()
     selection_bundle = _load_selection_bundle()
     single_model_dir = _resolve_single_model_dir()
+    runtime_calibration = _load_runtime_calibration()
     spec = None
-    if selection_bundle is None and single_model_dir is None:
+    if tabular_payload is None and selection_bundle is None and single_model_dir is None:
         spec = _load_manifest_spec()
         if spec is None:
             return None
 
-    feature_map = extract_causal_features(str(video_path))
     if not feature_map:
         return None
+
+    if tabular_payload is not None:
+        bundle = tabular_payload["bundle"]
+        prob = _score_tabular_bundle(bundle, feature_map)
+        if prob is None:
+            return None
+        threshold = float(bundle.threshold)
+        return VideoLevelScore(
+            video_fake=int(prob >= threshold),
+            fake_prob=float(prob),
+            threshold=threshold,
+            decision_source="video_level_tabular",
+            model_mode="tabular",
+            artifact_csv_path=artifact_csv_path,
+        )
 
     if selection_bundle is not None:
         prob = _score_bundle(selection_bundle, feature_map)
@@ -309,6 +525,7 @@ def score_video_level_cfn(video_path: str | os.PathLike[str]) -> VideoLevelScore
             threshold=float(threshold),
             decision_source="video_level_cfn_selection",
             model_mode="selection",
+            artifact_csv_path=artifact_csv_path,
         )
 
     if single_model_dir is not None:
@@ -325,6 +542,7 @@ def score_video_level_cfn(video_path: str | os.PathLike[str]) -> VideoLevelScore
             threshold=float(threshold),
             decision_source="video_level_cfn_single",
             model_mode="single",
+            artifact_csv_path=artifact_csv_path,
         )
 
     fold_scores: dict[str, float] = {}
@@ -351,20 +569,110 @@ def score_video_level_cfn(video_path: str | os.PathLike[str]) -> VideoLevelScore
     fake_prob = float(np.mean(list(fold_scores.values()) if fold_scores else all_bundle_scores))
     if fold_preds:
         vote_ratio = float(np.mean(fold_preds))
-        video_fake = int(vote_ratio >= 0.5)
         threshold = float(np.mean(list(fold_thresholds.values()))) if fold_thresholds else 0.5
+        decision_source = "video_level_cfn_ensemble"
+        if runtime_calibration is not None:
+            threshold = float(runtime_calibration["ensemble_threshold"])
+            video_fake = int(fake_prob >= threshold)
+            decision_source = "video_level_cfn_ensemble_calibrated"
+        else:
+            video_fake = int(vote_ratio >= 0.5)
+            decision_source = "video_level_cfn_ensemble"
     else:
         vote_ratio = None
         threshold = 0.5
         video_fake = int(fake_prob >= threshold)
+        decision_source = "video_level_cfn_ensemble"
 
     return VideoLevelScore(
         video_fake=int(video_fake),
         fake_prob=float(fake_prob),
         threshold=float(threshold),
-        decision_source="video_level_cfn_ensemble",
+        decision_source=decision_source,
         model_mode="ensemble",
+        artifact_csv_path=artifact_csv_path,
         vote_ratio=vote_ratio,
         fold_scores=fold_scores or None,
         fold_thresholds=fold_thresholds or None,
     )
+
+
+def _score_temporal_artifact(artifact_path: str | os.PathLike[str]) -> VideoLevelScore | None:
+    payload = _load_temporal_scorer()
+    if payload is None:
+        return None
+    artifact = read_runtimeparity_temporal_artifact(artifact_path)
+    sequence = np.asarray(artifact.get("sequence", []), dtype=np.float32)
+    if sequence.ndim != 2 or sequence.size == 0:
+        return None
+    mean = np.asarray(payload.get("mean", []), dtype=np.float32)
+    std = np.asarray(payload.get("std", []), dtype=np.float32)
+    if mean.size == sequence.shape[1] and std.size == sequence.shape[1]:
+        std = np.where(std < 1e-6, 1.0, std)
+        sequence = (sequence - mean[None, :]) / std[None, :]
+    model = payload.get("model")
+    if model is None:
+        return None
+    with torch.no_grad():
+        logits = model(torch.tensor(sequence, dtype=torch.float32).unsqueeze(0).to(_DEVICE))
+        prob = float(torch.sigmoid(logits).item())
+    bundle = payload["bundle"]
+    threshold = float(bundle.threshold)
+    return VideoLevelScore(
+        video_fake=int(prob >= threshold),
+        fake_prob=prob,
+        threshold=threshold,
+        decision_source="video_level_temporal",
+        model_mode="temporal",
+        artifact_csv_path=str(Path(artifact_path).resolve()),
+    )
+
+
+def create_step46_precompute_artifact(
+    video_path: str | os.PathLike[str],
+    *,
+    label: int = -1,
+    dataset: str = "live_upload",
+    video_fake: int = -1,
+    audio_fake: int = -1,
+    video_id: str | None = None,
+) -> str | None:
+    feature_map = extract_causal_features(str(video_path))
+    if not feature_map:
+        return None
+    row = normalize_step46_row(
+        feature_map,
+        video_path=str(video_path),
+        label=label,
+        dataset=dataset,
+        video_fake=video_fake,
+        audio_fake=audio_fake,
+        video_id=video_id,
+    )
+    artifact = write_step46_artifact(
+        row,
+        artifact_dir=_resolve_precompute_dir(),
+        file_stem=row.get("video_id"),
+    )
+    return artifact.csv_path
+
+
+def score_video_level_precomputed_csv(csv_path: str | os.PathLike[str]) -> VideoLevelScore | None:
+    row = read_step46_artifact(csv_path)
+    if row is None:
+        return None
+    return _score_video_level_feature_map(row, artifact_csv_path=str(Path(csv_path).resolve()))
+
+
+def score_video_level_cfn(video_path: str | os.PathLike[str]) -> VideoLevelScore | None:
+    if not _has_video_level_scorer():
+        return None
+    if _load_temporal_scorer() is not None:
+        artifact_path = write_runtimeparity_temporal_artifact(video_path)
+        if artifact_path is None:
+            return None
+        return _score_temporal_artifact(artifact_path)
+    artifact_csv_path = create_step46_precompute_artifact(video_path)
+    if artifact_csv_path is None:
+        return None
+    return score_video_level_precomputed_csv(artifact_csv_path)

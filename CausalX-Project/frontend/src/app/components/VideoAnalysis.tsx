@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
+import type { MouseEvent } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Maximize } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
@@ -39,6 +40,8 @@ export function VideoAnalysis({ videoFile, previewUrl, result, confidence, confi
   const [isVideoReady, setIsVideoReady] = useState(false);
 
   useEffect(() => {
+    // Keep a local object URL available so playback still works when the
+    // backend preview is unavailable or still being generated.
     const url = URL.createObjectURL(videoFile);
     setLocalVideoUrl(url);
     setVideoError(false);
@@ -47,6 +50,8 @@ export function VideoAnalysis({ videoFile, previewUrl, result, confidence, confi
   }, [videoFile]);
 
   useEffect(() => {
+    // Prefer the backend preview when present because it is normalized for UI
+    // playback, but fall back to the raw uploaded file immediately.
     setActiveVideoUrl(previewUrl || localVideoUrl);
     setCurrentTime(0);
     setDuration(0);
@@ -59,6 +64,8 @@ export function VideoAnalysis({ videoFile, previewUrl, result, confidence, confi
     const video = videoRef.current;
     if (!video || !activeVideoUrl) return;
 
+    // Reset the media element whenever the active source changes so time,
+    // metadata and readiness stay in sync with the current URL.
     video.load();
 
     const handleTimeUpdate = () => setCurrentTime(video.currentTime);
@@ -97,6 +104,8 @@ export function VideoAnalysis({ videoFile, previewUrl, result, confidence, confi
 
   useEffect(() => {
     if (!activeVideoUrl) return;
+    // Surface a friendly fallback state if the preview source never becomes
+    // playable instead of leaving the player looking idle indefinitely.
     const timer = window.setTimeout(() => {
       if (!isVideoReady && !videoError) {
         setVideoError(true);
@@ -114,7 +123,7 @@ export function VideoAnalysis({ videoFile, previewUrl, result, confidence, confi
     }
   };
 
-  const handleProgressBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleProgressBarClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!progressBarRef.current || !videoRef.current) return;
     const rect = progressBarRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -124,7 +133,7 @@ export function VideoAnalysis({ videoFile, previewUrl, result, confidence, confi
     setCurrentTime(newTime);
   };
 
-  const handleVolumeClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleVolumeClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!videoRef.current) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -167,6 +176,8 @@ export function VideoAnalysis({ videoFile, previewUrl, result, confidence, confi
 
   const activeFrame = useMemo(() => {
     if (!frames.length) return null;
+    // Map the current playback time to the nearest analyzed frame so the stats
+    // panel tracks what the user is watching.
     let closest = frames[0];
     let minDiff = Math.abs(currentTime - closest.timestamp);
     for (const f of frames) {
@@ -186,6 +197,8 @@ export function VideoAnalysis({ videoFile, previewUrl, result, confidence, confi
   const activeBboxFrame = useMemo(() => {
     if (!isFake || !currentBreach || !frames.length) return null;
 
+    // Bounding boxes are only drawn from frames inside the currently active
+    // breach segment to avoid showing detections outside the highlighted window.
     const withBboxInCurrentBreach = frames.filter(
       (f) =>
         Array.isArray(f.bbox) &&
@@ -211,6 +224,8 @@ export function VideoAnalysis({ videoFile, previewUrl, result, confidence, confi
   const showBoundingBox = isFake && Boolean(currentBreach && bbox);
   const bboxStyle = useMemo(() => {
     if (!bbox || !videoRef.current) return null;
+    // Backend boxes are stored in source-video coordinates, so rescale them to
+    // the rendered player size before drawing the overlay.
     const [x1, y1, x2, y2] = bbox;
     const vw = videoRef.current.clientWidth || naturalSize.width;
     const vh = videoRef.current.clientHeight || naturalSize.height;

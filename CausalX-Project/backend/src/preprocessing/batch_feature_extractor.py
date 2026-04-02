@@ -5,6 +5,7 @@ os.environ.setdefault("MEDIAPIPE_DISABLE_GPU", "1")
 import sys
 import subprocess
 import tempfile
+import json
 import cv2
 import numpy as np
 import pandas as pd
@@ -16,14 +17,29 @@ import warnings
 
 mp_face_mesh = mp.solutions.face_mesh
 
-try:
-    FACE_MESH = mp_face_mesh.FaceMesh(
+def _build_face_mesh():
+    return mp_face_mesh.FaceMesh(
         static_image_mode=False,
         max_num_faces=1,
         refine_landmarks=False,
         min_detection_confidence=0.3,
         min_tracking_confidence=0.3
     )
+
+
+def ensure_face_mesh():
+    global FACE_MESH  # noqa: PLW0603
+    if FACE_MESH is not None:
+        return FACE_MESH
+    try:
+        FACE_MESH = _build_face_mesh()
+    except Exception:  # noqa: BLE001
+        FACE_MESH = None
+    return FACE_MESH
+
+
+try:
+    FACE_MESH = _build_face_mesh()
 except Exception:  # noqa: BLE001
     FACE_MESH = None
 
@@ -42,6 +58,7 @@ _FFMPEG_MISSING_WARNED = False
 # --- 1. PROJECT PATH SETUP ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, "../../"))
+repo_root = os.path.abspath(os.path.join(project_root, ".."))
 sys.path.append(project_root)
 
 from src.utils.dataset_registry import get_fakeavceleb_videos
@@ -216,6 +233,102 @@ def _audio_stats_from_waveform(y, sr, hop_length=512):
     }
 
 
+def _mean_std(values):
+    arr = np.asarray(values, dtype=np.float32)
+    if arr.size == 0:
+        return 0.0, 0.0
+    return float(np.mean(arr)), float(np.std(arr))
+
+
+def _audio_spectral_summary(y, sr):
+    y = np.asarray(y, dtype=np.float32)
+    if y.size < 16:
+        return {}
+    try:
+        zcr = librosa.feature.zero_crossing_rate(y)[0]
+        centroid = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
+        bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sr)[0]
+        rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)[0]
+        flatness = librosa.feature.spectral_flatness(y=y)[0]
+        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=2)
+    except Exception:
+        return {}
+
+    out = {}
+    out["audio_zcr_mean"], out["audio_zcr_std"] = _mean_std(zcr)
+    out["audio_centroid_mean"], out["audio_centroid_std"] = _mean_std(centroid)
+    out["audio_bandwidth_mean"], out["audio_bandwidth_std"] = _mean_std(bandwidth)
+    out["audio_rolloff_mean"], out["audio_rolloff_std"] = _mean_std(rolloff)
+    out["audio_flatness_mean"], out["audio_flatness_std"] = _mean_std(flatness)
+    if mfcc.shape[0] >= 1:
+        out["audio_mfcc1_mean"], out["audio_mfcc1_std"] = _mean_std(mfcc[0])
+    if mfcc.shape[0] >= 2:
+        out["audio_mfcc2_mean"], out["audio_mfcc2_std"] = _mean_std(mfcc[1])
+    return out
+
+
+def _blockiness_proxy(gray):
+    gray = np.asarray(gray, dtype=np.float32)
+    if gray.ndim != 2 or gray.shape[0] < 16 or gray.shape[1] < 16:
+        return 0.0
+    if gray.shape[1] > 8:
+        v_a = gray[:, 8::8]
+        v_b = gray[:, 7::8]
+        n_v = min(v_a.shape[1], v_b.shape[1])
+        v_edges = float(np.abs(v_a[:, :n_v] - v_b[:, :n_v]).mean()) if n_v > 0 else 0.0
+    else:
+        v_edges = 0.0
+    if gray.shape[0] > 8:
+        h_a = gray[8::8, :]
+        h_b = gray[7::8, :]
+        n_h = min(h_a.shape[0], h_b.shape[0])
+        h_edges = float(np.abs(h_a[:n_h, :] - h_b[:n_h, :]).mean()) if n_h > 0 else 0.0
+    else:
+        h_edges = 0.0
+    local_dx = np.abs(np.diff(gray, axis=1)).mean() if gray.shape[1] > 1 else 0.0
+    local_dy = np.abs(np.diff(gray, axis=0)).mean() if gray.shape[0] > 1 else 0.0
+    denom = float(local_dx + local_dy + 1e-6)
+    return float((v_edges + h_edges) / denom)
+
+
+def _crop_artifact_summary(crops, prefix: str):
+    if not crops:
+        return {}
+
+    laps = []
+    edges = []
+    ents = []
+    blocks = []
+    flickers = []
+    prev_gray = None
+    for crop in crops:
+        if crop is None or getattr(crop, "size", 0) == 0:
+            continue
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
+        if gray is None or gray.size == 0:
+            continue
+        gray = cv2.resize(gray, (96, 96), interpolation=cv2.INTER_AREA)
+        gray_f = gray.astype(np.float32)
+        laps.append(float(cv2.Laplacian(gray_f, cv2.CV_32F).var()))
+        edge_map = cv2.Canny(gray, 60, 180)
+        edges.append(float(np.mean(edge_map > 0)))
+        hist = cv2.calcHist([gray], [0], None, [32], [0, 256]).ravel().astype(np.float32)
+        hist /= float(np.sum(hist) + 1e-6)
+        ents.append(float(-np.sum(hist * np.log(hist + 1e-8))))
+        blocks.append(_blockiness_proxy(gray_f))
+        if prev_gray is not None and prev_gray.shape == gray.shape:
+            flickers.append(float(np.mean(np.abs(gray_f - prev_gray.astype(np.float32))) / 255.0))
+        prev_gray = gray
+
+    out = {}
+    out[f"{prefix}_laplacian_mean"], out[f"{prefix}_laplacian_std"] = _mean_std(laps)
+    out[f"{prefix}_edge_density_mean"], out[f"{prefix}_edge_density_std"] = _mean_std(edges)
+    out[f"{prefix}_entropy_mean"], out[f"{prefix}_entropy_std"] = _mean_std(ents)
+    out[f"{prefix}_blockiness_mean"], out[f"{prefix}_blockiness_std"] = _mean_std(blocks)
+    out[f"{prefix}_flicker_mean"], out[f"{prefix}_flicker_std"] = _mean_std(flickers)
+    return out
+
+
 def _load_audio_with_ffmpeg(video_path, duration_s=10.0, target_sr=16000):
     global _FFMPEG_MISSING_WARNED  # noqa: PLW0603
     ffmpeg_bin = os.getenv("CFN_FFMPEG_BIN", "ffmpeg")
@@ -361,11 +474,58 @@ def windowed_corr_stats(lips, audio, times, window_s=1.0):
     return float(np.mean(corrs)), float(np.std(corrs))
 
 
-def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
-    if FACE_MESH is None:
-        if _STRICT_FACE_MESH:
-            return None
-        return extract_causal_features_fallback(video_path, clahe_val=clahe_val)
+def _extract_causal_features_via_root_subprocess(video_path, conf=0.3, clahe_val=3.0):
+    helper_path = os.path.join(project_root, "scripts", "extract_causal_features_child.py")
+    if not os.path.exists(helper_path):
+        return None
+
+    env = os.environ.copy()
+    env["MEDIAPIPE_DISABLE_GPU"] = "1"
+    env.setdefault("MPLCONFIGDIR", os.path.join(tempfile.gettempdir(), "mpl"))
+    env["PWD"] = repo_root
+    cmd = [
+        sys.executable,
+        helper_path,
+        "--video-path",
+        str(video_path),
+        "--conf",
+        str(conf),
+        "--clahe-val",
+        str(clahe_val),
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=repo_root,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except Exception:
+        return None
+
+    if proc.returncode != 0:
+        return None
+
+    lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    if not lines:
+        return None
+    try:
+        payload = json.loads(lines[-1])
+    except Exception:
+        return None
+    if not isinstance(payload, dict) or payload.get("_extractor_mode") != "facemesh":
+        return None
+    payload.pop("_extractor_mode", None)
+    return payload
+
+
+def _extract_causal_features_facemesh(video_path, conf=0.3, clahe_val=3.0):
+    face_mesh = ensure_face_mesh()
+    if face_mesh is None:
+        return None
+
     audio = _load_audio_features(video_path, duration_s=10.0)
     if audio is None:
         return None
@@ -412,7 +572,7 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
 
         enhanced = apply_clahe(frame, clahe_val)
         rgb = cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB)
-        results = FACE_MESH.process(rgb)
+        results = face_mesh.process(rgb)
 
         if results.multi_face_landmarks:
             raw = np.array([[lm.x, lm.y] for lm in results.multi_face_landmarks[0].landmark])
@@ -577,6 +737,9 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
         av_peak_prominence=float(peak_prominence),
         av_peak_corr=float(peak_corr),
     )
+    audio_extra = _audio_spectral_summary(y, sr)
+    face_extra = _crop_artifact_summary(effnet_face_crops, prefix="face")
+    mouth_extra = _crop_artifact_summary(effnet_mouth_crops, prefix="mouth")
 
     return {
         "jitter_mean": jitter_mean,
@@ -617,7 +780,25 @@ def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
         "lip_roi_emb": lip_roi_embedding_scalar,
         "wav2vec2_base_ft_emb": audio_embedding_scalar,
         "det_count": det_count,
+        **audio_extra,
+        **face_extra,
+        **mouth_extra,
     }
+
+
+def extract_causal_features(video_path, conf=0.3, clahe_val=3.0):
+    if FACE_MESH is None:
+        if _STRICT_FACE_MESH:
+            return None
+        proxied = _extract_causal_features_via_root_subprocess(
+            video_path,
+            conf=conf,
+            clahe_val=clahe_val,
+        )
+        if proxied:
+            return proxied
+        return extract_causal_features_fallback(video_path, clahe_val=clahe_val)
+    return _extract_causal_features_facemesh(video_path, conf=conf, clahe_val=clahe_val)
 
 
 def extract_causal_features_fallback(video_path, clahe_val=3.0):
@@ -843,6 +1024,9 @@ def extract_causal_features_fallback(video_path, clahe_val=3.0):
         av_peak_prominence=float(peak_prominence),
         av_peak_corr=float(peak_corr),
     )
+    audio_extra = _audio_spectral_summary(y, sr) if y is not None and len(y) > 0 else {}
+    face_extra = _crop_artifact_summary(effnet_face_crops, prefix="face")
+    mouth_extra = _crop_artifact_summary(effnet_mouth_crops, prefix="mouth")
 
     return {
         "jitter_mean": jitter_mean,
@@ -883,6 +1067,9 @@ def extract_causal_features_fallback(video_path, clahe_val=3.0):
         "lip_roi_emb": lip_roi_embedding_scalar,
         "wav2vec2_base_ft_emb": audio_embedding_scalar,
         "det_count": det_count,
+        **audio_extra,
+        **face_extra,
+        **mouth_extra,
     }
 
 # --- 6. BATCH RUNNER ---

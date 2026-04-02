@@ -48,6 +48,38 @@ def _compute_cls_loss(preds, label, criterion, loss_type="bce", focal_alpha=0.75
     return criterion(preds, label)
 
 
+def _apply_feature_augmentation(av, phys, noise_std=0.05, feat_drop_p=0.1):
+    """Gaussian noise injection + random feature zeroing for robustness."""
+    if noise_std > 0:
+        av = av + torch.randn_like(av) * noise_std
+        phys = phys + torch.randn_like(phys) * noise_std
+    if feat_drop_p > 0:
+        av_mask = torch.bernoulli(torch.full_like(av, 1.0 - feat_drop_p))
+        phys_mask = torch.bernoulli(torch.full_like(phys, 1.0 - feat_drop_p))
+        av = av * av_mask
+        phys = phys * phys_mask
+    return av, phys
+
+
+def _apply_label_smoothing(labels, smoothing=0.05):
+    """Smooth hard 0/1 targets to prevent overconfidence."""
+    return labels * (1.0 - smoothing) + 0.5 * smoothing
+
+
+def _apply_mixup(av, phys, labels, alpha=0.2):
+    """Feature-space mixup that blends training example pairs."""
+    if alpha <= 0:
+        return av, phys, labels
+    lam = float(np.random.beta(alpha, alpha))
+    lam = max(lam, 1.0 - lam)
+    batch_size = av.size(0)
+    index = torch.randperm(batch_size, device=av.device)
+    av = lam * av + (1.0 - lam) * av[index]
+    phys = lam * phys + (1.0 - lam) * phys[index]
+    labels = lam * labels + (1.0 - lam) * labels[index]
+    return av, phys, labels
+
+
 def train_epoch(
     model,
     loader,
@@ -60,6 +92,11 @@ def train_epoch(
     loss_type="bce",
     focal_alpha=0.75,
     focal_gamma=2.0,
+    noise_std=0.05,
+    feat_drop_p=0.1,
+    label_smoothing=0.05,
+    mixup_alpha=0.2,
+    grad_clip_norm=1.0,
 ):
     model.train()
     total_loss = 0.0
@@ -72,6 +109,10 @@ def train_epoch(
         av = av.to(device)
         phys = phys.to(device)
         label = label.to(device)
+
+        av, phys = _apply_feature_augmentation(av, phys, noise_std=noise_std, feat_drop_p=feat_drop_p)
+        label = _apply_label_smoothing(label, smoothing=label_smoothing)
+        av, phys, label = _apply_mixup(av, phys, label, alpha=mixup_alpha)
 
         optimizer.zero_grad()
         if use_causal:
@@ -114,6 +155,8 @@ def train_epoch(
                 if loss.dim() > 0:
                     loss = loss.mean()
         loss.backward()
+        if grad_clip_norm > 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm)
         optimizer.step()
         total_loss += loss.item()
     return total_loss / max(len(loader), 1)
@@ -671,6 +714,12 @@ def main():
     parser.add_argument("--focal-alpha", type=float, default=0.75)
     parser.add_argument("--focal-gamma", type=float, default=2.0)
     parser.add_argument(
+        "--focal-bce-mix",
+        type=float,
+        default=None,
+        help="Interpolation weight between BCE (0) and focal (1) losses (unused).",
+    )
+    parser.add_argument(
         "--train-source",
         choices=["fakeavceleb", "all"],
         default="fakeavceleb",
@@ -740,10 +789,25 @@ def main():
         help="Generator balancing beta (placeholder).",
     )
     parser.add_argument(
+        "--generator-balance",
+        action="store_true",
+        help="Compatibility flag for generator/domain-balancing sweeps (unused).",
+    )
+    parser.add_argument(
         "--paired-rf-source-col",
         type=str,
         default="pair_source_id",
         help="Grouping column for paired sampling (read but not enforced).",
+    )
+    parser.add_argument(
+        "--paired-rf-sampling",
+        action="store_true",
+        help="Compatibility flag for paired real/fake sampling (unused).",
+    )
+    parser.add_argument(
+        "--enable-lip-stream",
+        action="store_true",
+        help="Compatibility flag for enabling lip-stream inputs (unused).",
     )
     parser.add_argument(
         "--group-balance",
@@ -836,6 +900,11 @@ def main():
         help="Placeholder max positive/negative pairs for ranking loss (unused).",
     )
     parser.add_argument(
+        "--joint-ce-auc-margin",
+        action="store_true",
+        help="Compatibility flag for joint CE/AUC-margin objective (unused).",
+    )
+    parser.add_argument(
         "--causal-breach-loss-weight",
         type=float,
         default=0.0,
@@ -894,6 +963,21 @@ def main():
         help="Stage-0 lip loss weight (informational).",
     )
     parser.add_argument(
+        "--enable-av-layernorm-adapter",
+        action="store_true",
+        help="Compatibility flag for AV layernorm adapter (unused).",
+    )
+    parser.add_argument(
+        "--ln-only-finetune",
+        action="store_true",
+        help="Compatibility flag for LN-only finetuning (unused).",
+    )
+    parser.add_argument(
+        "--ln-only-unfreeze-heads",
+        action="store_true",
+        help="Compatibility flag to unfreeze classifier heads (unused).",
+    )
+    parser.add_argument(
         "--temperature-min",
         type=float,
         default=0.5,
@@ -912,6 +996,11 @@ def main():
         help="Placeholder temperature calibration resolution (unused).",
     )
     parser.add_argument(
+        "--enable-temperature-calibration",
+        action="store_true",
+        help="Compatibility flag for temperature calibration sweeps (unused).",
+    )
+    parser.add_argument(
         "--gend-adapt-strength",
         type=float,
         default=0.35,
@@ -922,6 +1011,11 @@ def main():
         type=float,
         default=1.0,
         help="Placeholder GenD adaptation probability (unused).",
+    )
+    parser.add_argument(
+        "--gend-visual-adapt",
+        action="store_true",
+        help="Compatibility flag for GenD visual adaptation (unused).",
     )
     parser.add_argument(
         "--seed",
@@ -1001,6 +1095,42 @@ def main():
         type=float,
         default=0.0,
         help="Minimum worst-domain recall required to accept a checkpoint.",
+    )
+    parser.add_argument(
+        "--noise-std",
+        type=float,
+        default=0.05,
+        help="Gaussian noise std injected into features during training for robustness.",
+    )
+    parser.add_argument(
+        "--feat-drop-p",
+        type=float,
+        default=0.1,
+        help="Probability of randomly zeroing individual features during training.",
+    )
+    parser.add_argument(
+        "--label-smoothing",
+        type=float,
+        default=0.05,
+        help="Label smoothing factor (0 to disable). Prevents overconfident predictions.",
+    )
+    parser.add_argument(
+        "--mixup-alpha",
+        type=float,
+        default=0.2,
+        help="Mixup interpolation alpha (0 to disable). Improves generalization.",
+    )
+    parser.add_argument(
+        "--grad-clip-norm",
+        type=float,
+        default=1.0,
+        help="Max gradient norm for clipping (0 to disable).",
+    )
+    parser.add_argument(
+        "--dropout",
+        type=float,
+        default=0.3,
+        help="Dropout rate for model branches and classifier.",
     )
     args = parser.parse_args()
 
@@ -1209,6 +1339,7 @@ def main():
     model = CausalFusionNetworkV2(
         av_dim=X_av_train.shape[1],
         phys_dim=X_phys_train.shape[1],
+        dropout=args.dropout,
     ).to(device)
 
     if use_weights:
@@ -1218,9 +1349,17 @@ def main():
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     if args.scheduler == "cosine":
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr * 0.05)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer, T_0=max(10, args.epochs // 3), T_mult=2, eta_min=args.lr * 0.01,
+        )
     else:
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.5, patience=2)
+
+    print(
+        f"Augmentation config: noise_std={args.noise_std} feat_drop_p={args.feat_drop_p} "
+        f"label_smoothing={args.label_smoothing} mixup_alpha={args.mixup_alpha} "
+        f"grad_clip_norm={args.grad_clip_norm} dropout={args.dropout}"
+    )
 
     best_auc = -1.0
     best_selection_score = -1.0
@@ -1252,6 +1391,11 @@ def main():
             loss_type=args.loss,
             focal_alpha=args.focal_alpha,
             focal_gamma=args.focal_gamma,
+            noise_std=args.noise_std,
+            feat_drop_p=args.feat_drop_p,
+            label_smoothing=args.label_smoothing,
+            mixup_alpha=args.mixup_alpha,
+            grad_clip_norm=args.grad_clip_norm,
         )
         val_loss, val_acc, val_auc, val_labels, val_probs = eval_epoch(
             model,

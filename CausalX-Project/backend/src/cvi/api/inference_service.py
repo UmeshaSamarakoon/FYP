@@ -25,7 +25,14 @@ def _safe_int(value, default):
     except (TypeError, ValueError):
         return default
 
+_DEFAULT_PROB_THRESH = 0.60
+
+
 def _resolve_prob_thresh():
+    # Prefer an explicit runtime override. When falling back to checkpoint
+    # metadata, keep a deployment-safe floor because per-checkpoint selection
+    # thresholds can be too permissive when reused by the clip-level threshold
+    # rule that drives the API by default.
     env_val = os.getenv("CFN_PROB_THRESH", "").strip()
     if env_val:
         try:
@@ -36,16 +43,15 @@ def _resolve_prob_thresh():
             pass
     inferred = resolve_default_probability_threshold()
     if inferred is not None and math.isfinite(inferred):
-        return float(inferred)
-    # Fall back to the legacy default when nothing better can be inferred.
-    return 0.247707
+        return max(float(inferred), _DEFAULT_PROB_THRESH)
+    return _DEFAULT_PROB_THRESH
 
 
 PROB_THRESH = _resolve_prob_thresh()
-RATIO_THRESH = float(os.getenv("CFN_RATIO_THRESH", "0.60"))
+RATIO_THRESH = float(os.getenv("CFN_RATIO_THRESH", "0.80"))
 SMOOTH_WINDOW = int(os.getenv("CFN_SMOOTH_WINDOW", "5"))
 CHUNK_SECONDS = int(os.getenv("CFN_CHUNK_SECONDS", "10"))
-CAUSAL_THRESH = float(os.getenv("CFN_CAUSAL_THRESH", "0.75"))
+CAUSAL_THRESH = float(os.getenv("CFN_CAUSAL_THRESH", "0.60"))
 ENABLE_SCM_CHECKS = os.getenv("CFN_ENABLE_SCM_CHECKS", "false").lower() == "true"
 SCM_Z_THRESH = float(os.getenv("CFN_SCM_Z_THRESH", "2.0"))
 MAX_SECONDS_ENV = os.getenv("CFN_MAX_SECONDS")
@@ -69,6 +75,8 @@ T2A_MIN_FRAMES = int(os.getenv("CFN_T2A_MIN_FRAMES", "24"))
 MIN_SUSPICIOUS_SEGMENT_FRAMES = max(1, _safe_int(os.getenv("CFN_MIN_SUSPICIOUS_SEGMENT_FRAMES"), 3))
 
 def build_inference_controller() -> InferenceController:
+    # Centralize env-driven knobs here so API handlers only deal with request
+    # lifecycle concerns and not model configuration details.
     engine = CausalInferenceEngine(
         prob_thresh=PROB_THRESH,
         ratio_thresh=RATIO_THRESH,
@@ -89,6 +97,8 @@ def build_inference_controller() -> InferenceController:
 
 
 def run_full_cvi_pipeline(video_path):
+    # Build a fresh controller per request so each run observes the current
+    # environment configuration without sharing mutable inference state.
     controller = build_inference_controller()
     output = controller.process(video_path)
     output["video_name"] = os.path.basename(video_path)

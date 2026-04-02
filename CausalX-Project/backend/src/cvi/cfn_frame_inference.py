@@ -58,7 +58,7 @@ _T2A_MIN_FRAMES = int(os.getenv("CFN_T2A_MIN_FRAMES", "24"))
 _TEMP_SCALE_FALLBACK = float(os.getenv("CFN_TEMP_SCALE", "1.0"))
 _TEMP_SCALE_PATH = os.getenv("CFN_TEMP_SCALE_PATH", "").strip() or None
 _RUNTIME_TEMP_SCALE = None
-_FEATURE_Z_CLIP = float(os.getenv("CFN_FEATURE_Z_CLIP", "20.0"))
+_FEATURE_Z_CLIP = float(os.getenv("CFN_FEATURE_Z_CLIP", "5.0"))
 
 
 def _use_embeddings() -> bool:
@@ -290,14 +290,6 @@ def _build_model_from_state(state, use_emb):
             return int(w.shape[1])
         return 0
 
-    def _classifier_in_dim() -> int:
-        if not isinstance(state, dict):
-            return 0
-        w = state.get("classifier.0.weight")
-        if isinstance(w, torch.Tensor) and w.ndim >= 2:
-            return int(w.shape[1])
-        return 0
-
     av_dim = _infer_in_dim("av_branch.0.weight")
     phys_dim = _infer_in_dim("physical_branch.0.weight")
     lip_dim = _infer_in_dim("lip_branch.0.weight")
@@ -311,11 +303,6 @@ def _build_model_from_state(state, use_emb):
         av_dim = 4 if use_emb else 3
     if phys_dim <= 0:
         phys_dim = 2
-    if _classifier_in_dim() == 4:
-        raise RuntimeError(
-            "Legacy CFN V1 checkpoints are not supported by the current runtime. "
-            "Use the active V2 `cfn_emb.pth` checkpoints or the production ensemble manifest."
-        )
     if lip_dim < 0:
         lip_dim = 0
     if lip_dim > 0:

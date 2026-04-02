@@ -43,6 +43,8 @@ def _safe_upload_path(filename: str) -> str:
 
 @app.on_event("startup")
 def startup_worker():
+    # Keep preview storage bounded across restarts, then start the async worker
+    # used by the polling-based analysis flow.
     cleanup_preview_cache(force=True)
     worker.start()
 
@@ -75,12 +77,15 @@ async def analyze_video(file: UploadFile = File(...)):
         with open(video_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
+        # Generate a lightweight preview first so the UI can render a stable
+        # playback source while the heavier inference pipeline runs.
         preview_url = ensure_video_preview(analysis_id, video_path)
         log_event(analysis_id, "processing_started")
         pipeline_output = run_full_cvi_pipeline(video_path)
         frame_results = pipeline_output["frames"]
         if preview_url:
             pipeline_output["preview_url"] = preview_url
+        # Emit internal diagnostics without changing the public response shape.
         emit_hidden_score_summary(analysis_id, file.filename, pipeline_output)
 
         label = "FAKE" if pipeline_output.get("video_fake") else "REAL"
@@ -105,7 +110,8 @@ async def analyze_video(file: UploadFile = File(...)):
         log_event(analysis_id, "processing_completed")
         return response
     finally:
-        # Prevent disk accumulation for sync endpoint
+        # Synchronous requests are fully resolved in-process, so the uploaded
+        # file can be deleted immediately after the response is assembled.
         if os.path.exists(video_path):
             os.remove(video_path)
 
@@ -123,6 +129,8 @@ async def analyze_video_async(file: UploadFile = File(...)):
             os.remove(video_path)
         raise HTTPException(status_code=500, detail=f"Failed to save upload: {exc}") from exc
 
+    # The async path keeps the uploaded file on disk because the background
+    # worker needs to pick it up after this request returns.
     preview_url = ensure_video_preview(analysis_id, video_path)
     job_id = worker.submit(video_path, job_id=analysis_id)
 
@@ -143,6 +151,7 @@ async def get_job_status(job_id: str, include_result: bool = False):
     return {
         "job_id": record.job_id,
         "status": record.status,
+        # Large frame payloads are omitted unless the caller explicitly asks.
         "result": record.result if include_result else None,
         "error": record.error
     }

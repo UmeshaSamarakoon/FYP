@@ -27,6 +27,8 @@ function buildSegments(
   threshold = PROB_THRESHOLD,
   maxGap = 0.5,
 ): BreachSegment[] {
+  // Prefer backend-computed segments so the UI stays aligned with the server's
+  // decision logic. The frame-based fallback keeps older responses usable.
   if (apiSegments?.length) {
     return apiSegments.map((segment) => ({
       start: segment.start,
@@ -77,6 +79,8 @@ export default function App() {
 
     try {
       const res = await analyzeVideo(file);
+      // Older and newer backend builds do not expose exactly the same response
+      // types, so normalize them here before the rest of the UI consumes them.
       const label = typeof res.video_fake === "string"
         ? res.video_fake.toUpperCase()
         : res.video_fake ? "FAKE" : "REAL";
@@ -96,6 +100,7 @@ export default function App() {
         confidence,
         confidenceLabel,
         previewUrl: res.preview_url ?? null,
+        // Breach evidence is only surfaced when the final video label is fake.
         causalBreachScore: resultLabel === "FAKE" ? res.causal_breach_score : undefined,
         breachSegments: resultLabel === "FAKE" ? segments : [],
         frames,
@@ -116,6 +121,8 @@ export default function App() {
   const breachCount = useMemo(() => analysisResult?.breachSegments.length ?? 0, [analysisResult]);
 
   if (isAnalyzing) {
+    // Keep the loading state separate so the upload screen and result screen
+    // do not flash while long-running analysis requests are in flight.
     return (
       <div className="min-h-screen bg-background">
         <div className="absolute top-6 left-6">
@@ -137,6 +144,8 @@ export default function App() {
   }
 
   if (uploadedFile && analysisResult) {
+    // Once both the source file and normalized result exist, render the full
+    // playback and evidence review experience.
     return (
       <div className="min-h-screen bg-background p-6">
         <div className="max-w-7xl mx-auto space-y-6">

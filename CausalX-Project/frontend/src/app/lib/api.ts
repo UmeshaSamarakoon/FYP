@@ -169,6 +169,8 @@ async function requestJson<T>(
       if (isLastAttempt || !isTransientStatus(apiError.status)) {
         throw apiError;
       }
+      // Retry only transient transport/backend failures with backoff so short
+      // outages do not immediately surface as user-facing errors.
       await sleep(retryDelay(retryBaseMs, attempt));
     }
   }
@@ -265,6 +267,8 @@ export async function analyzeVideo(
   let submittedJobId: string | null = null;
 
   try {
+    // The preferred path is async submission plus polling because inference can
+    // outlive a normal request timeout on CPU-only deployments.
     await pingBackend();
     const submit = await submitAsyncAnalysis(file);
     submittedJobId = submit.job_id;
@@ -285,6 +289,8 @@ export async function analyzeVideo(
         statusErrorCount = 0;
       } catch (error) {
         const apiError = normalizeApiError(error, "Async status check failed.");
+        // Tolerate a few transient polling failures so the browser does not
+        // abandon jobs that are still running correctly on the backend.
         if (isTransientStatus(apiError.status) && statusErrorCount < statusErrorTolerance) {
           statusErrorCount += 1;
           await sleep(pollIntervalMs);
@@ -321,6 +327,8 @@ export async function analyzeVideo(
       !submittedJobId &&
       (apiError.status === 404 || apiError.status === 405)
     ) {
+      // Older backends may not have the async endpoints yet, so fall back to
+      // the original blocking `/analyze` route before surfacing an error.
       try {
         const result = await runDirectAnalysis(file);
         return {

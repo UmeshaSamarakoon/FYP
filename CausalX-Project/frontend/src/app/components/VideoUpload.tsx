@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import type { ChangeEvent, DragEvent } from 'react';
 import { Upload, Video, AlertTriangle } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Logo } from '@/app/components/Logo';
@@ -14,12 +15,14 @@ export function VideoUpload({ onAnalyze, isAnalyzing = false, error }: VideoUplo
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const selectFile = useCallback((file: File | null | undefined) => {
+    // Keep validation lightweight on the client and let the backend perform
+    // deeper inspection if a malformed file still slips through.
     if (!file) return;
     if (!file.type.startsWith('video/')) return;
     setSelectedFile(file);
   }, []);
 
-  const handleDrag = useCallback((e: React.DragEvent) => {
+  const handleDrag = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === "dragenter" || e.type === "dragover") {
@@ -29,14 +32,14 @@ export function VideoUpload({ onAnalyze, isAnalyzing = false, error }: VideoUplo
     }
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
     selectFile(e.dataTransfer.files?.[0]);
   }, [selectFile]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     selectFile(e.target.files?.[0]);
     // Allow choosing the same file again after a reset or failed analysis.
     e.target.value = '';
