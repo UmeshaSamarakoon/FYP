@@ -9,8 +9,14 @@ export MEDIAPIPE_DISABLE_GPU=1
 export CUDA_VISIBLE_DEVICES=-1
 export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/mpl}"
 
-DATA_PATH="${DATA_PATH:-data/processed/causal_multimodal_dataset_mixed_train.csv}"
-HARD_NEG_FILE="${HARD_NEG_FILE:-data/processed/hard_negatives_mixed.tsv}"
+if [[ -z "${DATA_PATH:-}" ]]; then
+  if [[ -f "data/processed/causal_multimodal_dataset_fakeav_fulltrain_train.csv" ]]; then
+    DATA_PATH="data/processed/causal_multimodal_dataset_fakeav_fulltrain_train.csv"
+  else
+    DATA_PATH="data/processed/causal_multimodal_dataset.csv"
+  fi
+fi
+HARD_NEG_FILE="${HARD_NEG_FILE:-data/processed/hard_negatives_fakeav.tsv}"
 RUN_TAG="${RUN_TAG:-featup_$(date '+%Y%m%d_%H%M%S')}"
 MODEL_DIR="${MODEL_DIR:-models/${RUN_TAG}}"
 LOG_DIR="${LOG_DIR:-models/experiment_logs}"
@@ -26,7 +32,7 @@ CAUSAL_WEIGHT="${CAUSAL_WEIGHT:-0.15}"
 HARD_NEG_WEIGHT="${HARD_NEG_WEIGHT:-6.0}"
 FOCAL_ALPHA="${FOCAL_ALPHA:-0.75}"
 FOCAL_GAMMA="${FOCAL_GAMMA:-2.0}"
-TRAIN_SOURCE="${TRAIN_SOURCE:-all}"
+TRAIN_SOURCE="${TRAIN_SOURCE:-fakeavceleb}"
 FEATURE_PROFILE="${FEATURE_PROFILE:-auto}"
 SELECTION_METRIC="${SELECTION_METRIC:-hybrid_robust}"
 SELECTION_THRESHOLD_MODE="${SELECTION_THRESHOLD_MODE:-best_f1}"

@@ -1,202 +1,76 @@
-# CausalX
+# Backend
 
-## Recommended retraining workflow (end-to-end)
-Use these scripts to retrain on your dataset, rebalance classes, and (optionally) train the embedding-aware model:
+## What This Service Does
 
-```
-./scripts/run_training_pipeline.sh
-```
+The backend provides:
 
-Embedding-aware training:
+- `POST /analyze` for synchronous video analysis
+- `POST /analyze/async` and `GET /analyze/status/{job_id}` for polling-based analysis
+- `GET /results/{analysis_id}` for stored results
+- `GET /health` for readiness checks
 
-```
-./scripts/run_embedding_training.sh
-```
+The default inference path uses the checked-in Step46 model assets in `backend/models/`.
 
-Threshold tuning (short-term fix only) is controlled by environment variables. Copy
-`backend/.env.example` and override `CFN_RATIO_THRESH` as needed. `CFN_PROB_THRESH` can
-still be set manually, but when it is absent the API now defaults to the selection threshold
-stored inside the checkpoint’s `cfn_threshold_report.json` (0.5 for the shipped weights).
-You can also raise `CFN_MIN_SUSPICIOUS_SEGMENT_FRAMES` to ignore very short suspicious bursts before the ratio gate fires.
+## Local Setup
 
-## FakeAVCeleb audio-bias mitigation (explicit preprocessing step)
-Before feature extraction, trim the first 100ms from the audio track of all FakeAVCeleb videos.
-This removes a known silence-shortcut bias at clip start.
-
-In-place trim command:
-
-```
-python scripts/trim_fakeav_audio_head.py \
-  --input-root data/raw/fakeavceleb \
-  --in-place \
-  --trim-seconds 0.10 \
-  --manifest-csv data/processed/fakeav_audio_trim_manifest.csv
-```
-
-Pipeline shortcut:
-
-```
-TRIM_FAKEAV_AUDIO_HEAD=true ./scripts/run_training_pipeline.sh
-```
-
-## Retraining the CFN model (recommended for higher accuracy)
-
-The inference pipeline uses a pretrained model from `backend/models/cfn.pth`. 
-
-### 1) Prepare the dataset
-Generate the feature dataset:
-
-```
-python -m src.preprocessing.batch_feature_extractor
-```
-
-This writes `data/processed/causal_multimodal_dataset.csv`.
-
-
-### 2) Train with efficient techniques
-Run the training script (uses mixed precision on GPU, cosine LR, early stopping, feature standardization, and class imbalance weighting):
-
-```
-python -m src.training.train_cfn \
-  --dataset-csv data/processed/causal_multimodal_dataset.csv \
-  --epochs 30 \
-  --batch-size 128 \
-  --lr 1e-3 \
-  --weight-decay 1e-4
-```
-
-The best checkpoint is saved to `backend/models/cfn.pth` by default.
-
-> Note: `--data` is supported as a deprecated alias for `--dataset-csv` if you see older docs or scripts.
-
-### 2a) (Optional) Balance the dataset (Option A)
-If your dataset is heavily imbalanced, downsample to the smallest class before training:
-
-```
-python -m src.preprocessing.balance_dataset \
-  --input-csv data/processed/causal_multimodal_dataset.csv \
-  --output-csv data/processed/causal_multimodal_dataset_balanced.csv
-```
-
-Then train using the balanced CSV:
-
-```
-python -m src.training.train_cfn \
-  --dataset-csv data/processed/causal_multimodal_dataset_balanced.csv
-```
-
-### 3) Use the new model
-Restart the API server so it reloads the updated weights.
-
-## Embedding-aware training (TCN + Wav2Vec2)
-If there are generated embedding columns (`tcn_visual_emb`, `wav2vec_audio_emb`) in the CSV,
-train the V2 CFN model with:
-
-```
-python -m src.training.train_cfn \
-  --dataset-csv data/processed/causal_multimodal_dataset.csv \
-  --use-embeddings \
-  --epochs 30 \
-  --batch-size 128 \
-  --lr 1e-3 \
-  --weight-decay 1e-4
-```
-
-This writes `models/cfn_emb.pth`. Enable it during inference by setting:
-- `CFN_USE_EMBEDDINGS=true`
-- `CFN_EMB_MODEL_PATH=models/cfn_emb.pth`
-
-Optional SCM dependency score:
-- `CFN_ENABLE_SCM_CHECKS=true`
-
-## Deployment note (Render)
-If you deploy the backend as a Render service, keep `runtime.txt` in this `backend/` directory so Render pins the Python version for the service root.
-
-
-## Retraining the CFN model (recommended for higher accuracy)
-
-The inference pipeline uses a pretrained model from `backend/models/cfn.pth`. For better accuracy on your dataset, retrain using the feature CSV produced by the preprocessing scripts.
-
-### 1) Prepare the dataset
-Generate the feature dataset:
-
-```
-python -m src.preprocessing.batch_feature_extractor
-```
-
-This writes `data/processed/causal_multimodal_dataset.csv`.
-
-If updatde feature extraction (e.g., new lip/audio statistics), rerun this step to refresh the CSV.
-
-### 2) Train with efficient techniques
-Run the training script (uses mixed precision on GPU, cosine LR, early stopping, feature standardization, and class imbalance weighting):
-
-```
-python -m src.training.train_cfn \
-  --dataset-csv data/processed/causal_multimodal_dataset.csv \
-  --epochs 30 \
-  --batch-size 128 \
-  --lr 1e-3 \
-  --weight-decay 1e-4
-```
-
-The best checkpoint is saved to `backend/models/cfn.pth` by default.
-
-> Note: `--data` is supported as a deprecated alias for `--dataset-csv` if you see older docs or scripts.
-
-### 2a) (Optional) Balance the dataset (Option A)
-If your dataset is heavily imbalanced, downsample to the smallest class before training:
-
-```
-python -m src.preprocessing.balance_dataset \
-  --input-csv data/processed/causal_multimodal_dataset.csv \
-  --output-csv data/processed/causal_multimodal_dataset_balanced.csv
-```
-
-Then train using the balanced CSV:
-
-```
-python -m src.training.train_cfn \
-  --dataset-csv data/processed/causal_multimodal_dataset_balanced.csv
-```
-
-### 3) Use the new model
-Restart the API server so it reloads the updated weights.
-## Retraining the CFN model (recommended for accuracy)
-
-This project ships with a pretrained CFN model (`models/cfn.pth`). To improve accuracy on your own dataset, retrain using the processed CSV features.
-
-### 1) Prepare the dataset
-Generate the feature CSV using the preprocessing pipeline (adjust paths as needed):
+From the `backend/` directory:
 
 ```bash
-python -m src.preprocessing.batch_feature_extractor
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
 ```
 
-This produces a CSV similar to:
-
-```
-data/processed/causal_multimodal_dataset.csv
-```
-
-### 2) Retrain with efficient defaults
-Run the training script with early stopping, stratified split, scaling, and class imbalance handling:
+## Run Locally
 
 ```bash
-python -m src.training.train_cfn \
-  --data data/processed/causal_multimodal_dataset.csv \
-  --epochs 30 \
-  --batch-size 64 \
-  --lr 1e-3 \
-  --weight-decay 1e-4 \
-  --patience 5 \
-  --val-split 0.2 \
-  --use-scaler
+python -m uvicorn src.cvi.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 3) Use the new model in inference
-The training script writes:
-- `models/cfn.pth` (trained weights)
-- `models/cfn_scaler.pkl` (feature scaler, used automatically if present)
+Local endpoints:
 
-No code changes are required; the inference pipeline automatically loads the scaler if found.
+- API root: `http://127.0.0.1:8000`
+- Health: `http://127.0.0.1:8000/health`
+
+## Environment Configuration
+
+The backend reads runtime settings from `.env`.
+
+Start from:
+
+```bash
+cp .env.example .env
+```
+
+Key settings:
+
+- `CFN_RATIO_THRESH`
+- `CFN_CAUSAL_THRESH`
+- `CFN_REQUIRE_FLAG`
+- `CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST`
+- `CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR`
+
+In the current checked-in configuration, the Step46 ensemble manifest remains the safe default runtime path.
+
+## Hosted Backend
+
+- `https://causalx-backend.onrender.com`
+
+Because the hosted service is on a free Render instance, cold starts and long analysis timeouts can happen.
+
+## Project Files Worth Keeping
+
+- `src/`: production API and inference code
+- `models/fakeavceleb_best_step46_multiseed_manifest.json`
+- `models/step46_fakeav_robust_constrained_*`
+- `scripts/run_fakeav_mrdf_5fold_cv.py`
+- `scripts/run_step46_fakeav_robust_constrained.sh`
+
+## What Is Not Part Of The Core Runtime
+
+These are useful for research, validation, or thesis support, but not required to boot the API:
+
+- `notebooks/`
+- `evidence/`
+- most generated `outputs/`, `uploads/`, and local caches

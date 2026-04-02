@@ -6,6 +6,7 @@
 # Python env / caches
 backend/.venv/
 backend/.torch/
+backend/.torch_cache/
 backend/.mpl_cache/
 backend/.mplconfig/
 backend/**/__pycache__/
@@ -16,6 +17,7 @@ backend/.mypy_cache/
 
 # Runtime/generated backend files
 backend/uploads/
+backend/outputs/
 backend/data/results.db
 backend/eval_cache_*.json
 backend/eval_manifest*.tsv
@@ -47,3 +49,7 @@ frontend/.env.local
 # Accidental local output trees
 backend/path/
 backend/backend/
+backend/cp/
+data/
+notebooks/
+uploads/
