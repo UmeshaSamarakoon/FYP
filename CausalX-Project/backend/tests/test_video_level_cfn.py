@@ -14,8 +14,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.cvi import video_level_cfn
-from src.cvi.step46_precompute import STEP46_AV_COLUMNS, STEP46_PHYS_COLUMNS, read_step46_artifact
 from src.modules.causal_fusion import CausalFusionNetworkV2
+
+
+STEP46_AV_COLUMNS = video_level_cfn.STEP46_AV_COLUMNS
+STEP46_PHYS_COLUMNS = video_level_cfn.STEP46_PHYS_COLUMNS
+read_step46_artifact = video_level_cfn.read_step46_artifact
 
 
 def _reset_video_level_caches() -> None:
@@ -116,6 +120,28 @@ def test_video_level_tabular_scorer_gate(tmp_path, monkeypatch):
     assert score.fake_prob >= 0.5
 
 
+def test_video_level_defaults_do_not_enable_tabular_or_manifest(monkeypatch, tmp_path):
+    _reset_video_level_caches()
+
+    monkeypatch.setattr(video_level_cfn, "_DEFAULT_TABULAR_SCORER_PATH", tmp_path / "default-tabular.joblib")
+    monkeypatch.setattr(video_level_cfn, "_DEFAULT_MANIFEST_PATH", tmp_path / "default-manifest.json")
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_TABULAR_SCORER_PATH", raising=False)
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR", raising=False)
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_MODEL_DIR", raising=False)
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_SELECTION_JSON", raising=False)
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_ENSEMBLE_MANIFEST_PATH", raising=False)
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", raising=False)
+
+    def _should_not_extract(_path):
+        raise AssertionError("feature extraction should not run when video-level scorers are not explicitly enabled")
+
+    monkeypatch.setattr(video_level_cfn, "extract_causal_features", _should_not_extract)
+
+    score = video_level_cfn.score_video_level_cfn("clip.mp4")
+
+    assert score is None
+
+
 def test_video_level_temporal_scorer_gate(tmp_path, monkeypatch):
     scorer_path = tmp_path / "temporal.pt"
     _write_temporal_scorer(scorer_path, bias=2.0)
@@ -158,7 +184,7 @@ def test_video_level_cfn_single_model_gate(tmp_path, monkeypatch):
     monkeypatch.setenv("CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR", "false")
     monkeypatch.delenv("CFN_VIDEO_LEVEL_SELECTION_JSON", raising=False)
     monkeypatch.delenv("CFN_VIDEO_LEVEL_ENSEMBLE_MANIFEST_PATH", raising=False)
-    monkeypatch.delenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", raising=False)
+    monkeypatch.setenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", "false")
     monkeypatch.setenv("CFN_VIDEO_LEVEL_PRECOMPUTE_DIR", str(tmp_path / "precompute"))
     monkeypatch.setattr(
         video_level_cfn,
@@ -204,7 +230,7 @@ def test_video_level_cfn_default_manifest_is_used_when_present(tmp_path, monkeyp
     monkeypatch.delenv("CFN_VIDEO_LEVEL_SELECTION_JSON", raising=False)
     monkeypatch.delenv("CFN_VIDEO_LEVEL_ENSEMBLE_MANIFEST_PATH", raising=False)
     monkeypatch.delenv("CFN_VIDEO_LEVEL_RUNTIME_CALIBRATION_JSON", raising=False)
-    monkeypatch.delenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", raising=False)
+    monkeypatch.setenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", "true")
     monkeypatch.setenv("CFN_VIDEO_LEVEL_PRECOMPUTE_DIR", str(tmp_path / "precompute"))
     monkeypatch.setattr(
         video_level_cfn,
@@ -232,6 +258,43 @@ def test_video_level_cfn_can_disable_default_manifest(monkeypatch):
 
     def _should_not_extract(_path):
         raise AssertionError("feature extraction should not run when default manifest usage is disabled")
+
+    monkeypatch.setattr(video_level_cfn, "extract_causal_features", _should_not_extract)
+
+    score = video_level_cfn.score_video_level_cfn("clip.mp4")
+
+    assert score is None
+
+
+def test_video_level_cfn_ignores_manifest_entries_with_missing_model_files(tmp_path, monkeypatch):
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "name": "missing-model-manifest",
+                "artifacts": [
+                    {
+                        "fold": "fold_01",
+                        "model_path": str(tmp_path / "missing-model" / "cfn_emb.pth"),
+                        "scaler_path": str(tmp_path / "missing-model" / "cfn_scaler.pkl"),
+                    }
+                ],
+            }
+        )
+    )
+    _reset_video_level_caches()
+
+    monkeypatch.setattr(video_level_cfn, "_DEFAULT_MANIFEST_PATH", manifest_path)
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_MODEL_DIR", raising=False)
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_TABULAR_SCORER_PATH", raising=False)
+    monkeypatch.setenv("CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR", "false")
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_SELECTION_JSON", raising=False)
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_ENSEMBLE_MANIFEST_PATH", raising=False)
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_RUNTIME_CALIBRATION_JSON", raising=False)
+    monkeypatch.setenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", "true")
+
+    def _should_not_extract(_path):
+        raise AssertionError("feature extraction should not run when manifest model files are missing")
 
     monkeypatch.setattr(video_level_cfn, "extract_causal_features", _should_not_extract)
 
@@ -277,7 +340,7 @@ def test_video_level_cfn_runtime_calibration_overrides_manifest_threshold(tmp_pa
     monkeypatch.delenv("CFN_VIDEO_LEVEL_SELECTION_JSON", raising=False)
     monkeypatch.delenv("CFN_VIDEO_LEVEL_ENSEMBLE_MANIFEST_PATH", raising=False)
     monkeypatch.delenv("CFN_VIDEO_LEVEL_RUNTIME_CALIBRATION_JSON", raising=False)
-    monkeypatch.delenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", raising=False)
+    monkeypatch.setenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", "true")
     monkeypatch.setenv("CFN_VIDEO_LEVEL_PRECOMPUTE_DIR", str(tmp_path / "precompute"))
     monkeypatch.setattr(
         video_level_cfn,

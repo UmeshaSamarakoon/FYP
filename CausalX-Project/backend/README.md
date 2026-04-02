@@ -9,7 +9,7 @@ The backend provides:
 - `GET /results/{analysis_id}` for stored results
 - `GET /health` for readiness checks
 
-The default inference path uses the checked-in Step46 model assets in `backend/models/`.
+The default inference path uses the live frame-level CFN pipeline. Optional video-level Step46 scorers remain available, but they are opt-in.
 
 ## Local Setup
 
@@ -51,7 +51,7 @@ Key settings:
 - `CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST`
 - `CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR`
 
-In the current checked-in configuration, the Step46 ensemble manifest remains the safe default runtime path.
+In the current checked-in configuration, the live frame pipeline is the default for both local runs and deployment. Enable `CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST=true` or `CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR=true` only when you intentionally want those video-level overrides.
 
 ## Hosted Backend
 

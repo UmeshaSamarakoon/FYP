@@ -4,7 +4,7 @@ CausalX is a deepfake-analysis prototype with:
 
 - a FastAPI backend for upload, inference, and result retrieval
 - a Vite/React frontend for the analysis UI
-- checked-in Step46 model artifacts for the default local/runtime scoring path
+- a live frame-level CFN pipeline by default, with optional Step46 video-level scorers available when explicitly enabled
 
 ## Repo Layout
 
@@ -56,6 +56,6 @@ The hosted services run on free Render instances, so cold starts and long video 
 
 ## Notes
 
-- The default scoring path expects the checked-in Step46 assets under `backend/models/`.
+- The default scoring path is the live frame pipeline; video-level Step46 scorers are opt-in via backend env settings.
 - Local uploads, caches, previews, and build outputs are generated at runtime and should not be committed.
 - Notebook and experiment history is kept under `backend/notebooks/` and `backend/evidence/`.
