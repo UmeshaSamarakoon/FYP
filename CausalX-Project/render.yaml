@@ -10,8 +10,10 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
-      - key: CFN_ENSEMBLE_MANIFEST_PATH
-        value: models/fakeavceleb_best_step46_multiseed_manifest.json
+      - key: CFN_EMB_MODEL_PATH
+        value: models/cfn_emb.pth
+      - key: CFN_SCALER_PATH
+        value: models/cfn_scaler.pkl
       - key: CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR
         value: "false"
       - key: CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST

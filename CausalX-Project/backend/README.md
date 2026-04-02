@@ -9,7 +9,7 @@ The backend provides:
 - `GET /results/{analysis_id}` for stored results
 - `GET /health` for readiness checks
 
-The default inference path uses the checked-in Step46 model assets in `backend/models/`.
+The default inference path uses the tracked single-checkpoint CFN backbone in `backend/models/cfn_emb.pth` plus `backend/models/cfn_scaler.pkl`. Optional video-level Step46 scorers remain available, but they are opt-in.
 
 ## Local Setup
 
@@ -45,13 +45,15 @@ cp .env.example .env
 
 Key settings:
 
+- `CFN_EMB_MODEL_PATH`
+- `CFN_SCALER_PATH`
 - `CFN_RATIO_THRESH`
 - `CFN_CAUSAL_THRESH`
 - `CFN_REQUIRE_FLAG`
 - `CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST`
 - `CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR`
 
-In the current checked-in configuration, the Step46 ensemble manifest remains the safe default runtime path.
+In the current checked-in configuration, the live frame pipeline is the default for both local runs and deployment. The checked-in multiseed Step46 manifest is not the default runtime path.
 
 ## Hosted Backend
 
@@ -59,7 +61,7 @@ In the current checked-in configuration, the Step46 ensemble manifest remains th
 
 Because the hosted service is on a free Render instance, cold starts and long analysis timeouts can happen.
 
-If you deploy with the repo-root [render.yaml](/Users/venturit/Documents/GitHub/FYP/CausalX-Project/render.yaml), Render is pinned to the same live-pipeline env as local. For an already-created manual Render service, mirror the same backend env values in the dashboard.
+If you deploy with the repo-root [render.yaml](/Users/venturit/Documents/GitHub/FYP/CausalX-Project/render.yaml), Render is pinned to the same live-pipeline env as local. For an already-created manual Render service, remove any stale `CFN_ENSEMBLE_MANIFEST_PATH` dashboard variable and mirror the same backend env values there instead.
 
 ## Project Files Worth Keeping
 

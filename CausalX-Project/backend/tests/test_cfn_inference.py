@@ -15,6 +15,7 @@ os.environ.setdefault("MEDIAPIPE_DISABLE_GPU", "1")
 
 from src.cvi.api.inference_service import build_inference_controller
 from src.cvi.api import inference_service
+from src.cvi import cfn_frame_inference
 
 
 SAMPLE_VIDEO = PROJECT_ROOT / "data/validation_evaluation_videos/evaluation/data/raw/fakeavceleb/FakeVideo-FakeAudio/African/women/id00220/00027_id00220_wavtolip.mp4"
@@ -47,3 +48,11 @@ def test_prob_threshold_explicit_override_wins(monkeypatch):
     monkeypatch.setattr(inference_service, "resolve_default_probability_threshold", lambda: 0.17667756484283345)
 
     assert inference_service._resolve_prob_thresh() == pytest.approx(0.73)
+
+
+def test_frame_inference_defaults_to_single_checkpoint_when_manifest_not_explicit(monkeypatch):
+    monkeypatch.delenv("CFN_ENSEMBLE_MANIFEST_PATH", raising=False)
+    monkeypatch.delenv("CFN_EMB_MODEL_PATH", raising=False)
+
+    assert cfn_frame_inference._resolve_manifest_path(single_model_override="") is None
+    assert cfn_frame_inference._resolve_model_paths_for_threshold() == [cfn_frame_inference._DEFAULT_EMB_MODEL_PATH]

@@ -49,7 +49,7 @@ _AV_FEATURE_ORDER = list(BASELINE_AV_FEATURES) + list(EXTENDED_AV_FEATURES) + [
 ]
 _PHYS_FEATURE_ORDER = list(BASELINE_PHYS_FEATURES) + list(EXTENDED_PHYS_FEATURES)
 _LIP_FEATURE_ORDER = list(LIP_STREAM_FEATURES)
-_DEFAULT_EMB_MODEL_PATH = _MODULE_DIR / "models" / "step46_fakeav_robust_constrained_s1337_20260317_031304_fold_01_p2_r03_focal_lr0p0003" / "cfn_emb.pth"
+_DEFAULT_EMB_MODEL_PATH = _MODULE_DIR / "models" / "cfn_emb.pth"
 _DEFAULT_ENSEMBLE_MANIFEST_PATH = _MODULE_DIR / "models" / "fakeavceleb_best_step46_multiseed_manifest.json"
 _T2A_ENABLE = os.getenv("CFN_T2A_ENABLE", "false").lower() == "true"
 _T2A_TARGET_ENTROPY = float(os.getenv("CFN_T2A_TARGET_ENTROPY", "0.58"))
@@ -183,8 +183,6 @@ def _resolve_manifest_path(single_model_override: str = ""):
     explicit = os.getenv("CFN_ENSEMBLE_MANIFEST_PATH", "").strip()
     if explicit:
         return Path(explicit)
-    if not single_model_override and _default_manifest_has_all_model_paths():
-        return _DEFAULT_ENSEMBLE_MANIFEST_PATH
     return None
 
 
