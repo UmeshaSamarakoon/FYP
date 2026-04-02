@@ -468,7 +468,9 @@ def _resolve_tabular_scorer_path() -> Path | None:
         p = Path(explicit).expanduser()
         return p if p.exists() else None
     allow_default_raw = os.getenv("CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR", "").strip().lower()
-    allow_default = allow_default_raw in {"1", "true", "yes", "on"}
+    if allow_default_raw in {"0", "false", "no", "off"}:
+        return None
+    allow_default = allow_default_raw in {"", "1", "true", "yes", "on"}
     if allow_default and _DEFAULT_TABULAR_SCORER_PATH.exists():
         return _DEFAULT_TABULAR_SCORER_PATH
     return None
@@ -480,6 +482,40 @@ def _resolve_temporal_scorer_path() -> Path | None:
         return None
     p = Path(explicit).expanduser()
     return p if p.exists() else None
+
+
+def get_runtime_pipeline_summary() -> dict[str, object]:
+    decision_pipeline = "live_frame_pipeline"
+    video_level_mode = "disabled"
+
+    temporal_path = _resolve_temporal_scorer_path()
+    tabular_path = _resolve_tabular_scorer_path()
+    selection_bundle = _load_selection_bundle()
+    single_model_dir = _resolve_single_model_dir()
+    manifest_spec = _load_manifest_spec()
+
+    if temporal_path is not None:
+        decision_pipeline = "video_level_temporal"
+        video_level_mode = "temporal"
+    elif tabular_path is not None:
+        decision_pipeline = "video_level_tabular"
+        video_level_mode = "tabular"
+    elif selection_bundle is not None:
+        decision_pipeline = "video_level_selection"
+        video_level_mode = "selection"
+    elif single_model_dir is not None:
+        decision_pipeline = "video_level_single_model"
+        video_level_mode = "single_model"
+    elif manifest_spec is not None:
+        decision_pipeline = "video_level_manifest"
+        video_level_mode = "manifest"
+
+    return {
+        "decision_pipeline": decision_pipeline,
+        "video_level_mode": video_level_mode,
+        "video_level_default_tabular_enabled": os.getenv("CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR", "").strip().lower() in {"1", "true", "yes", "on"},
+        "video_level_default_manifest_enabled": os.getenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", "").strip().lower() in {"1", "true", "yes", "on"},
+    }
 
 
 @lru_cache(maxsize=None)
@@ -581,11 +617,8 @@ def _load_temporal_scorer():
 def _score_bundle(bundle: _ModelBundle, feature_map: dict[str, object]) -> float | None:
     from src.cvi.cfn_frame_inference import _apply_temperature_scale, _prepare_features_for_model
 
-    try:
-        model, av_dim, phys_dim = _load_model(bundle.model_path)
-        scaler = _load_scaler(bundle.scaler_path)
-    except Exception:
-        return None
+    model, av_dim, phys_dim = _load_model(bundle.model_path)
+    scaler = _load_scaler(bundle.scaler_path)
     base_av = _ordered_feature_values(feature_map, STEP46_AV_COLUMNS)
     base_phys = _ordered_feature_values(feature_map, STEP46_PHYS_COLUMNS)
     av_features, phys_features, _ = _prepare_features_for_model(
@@ -644,7 +677,9 @@ def _resolve_manifest_path() -> Path | None:
         p = Path(explicit).expanduser()
         return p if p.exists() else None
     allow_default_raw = os.getenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", "").strip().lower()
-    allow_default = allow_default_raw in {"1", "true", "yes", "on"}
+    if allow_default_raw in {"0", "false", "no", "off"}:
+        return None
+    allow_default = allow_default_raw in {"", "1", "true", "yes", "on"}
     if allow_default and _DEFAULT_MANIFEST_PATH.exists():
         return _DEFAULT_MANIFEST_PATH
     return None
@@ -784,15 +819,11 @@ def _load_manifest_spec():
         resolved_model = Path(model_path)
         if not resolved_model.is_absolute():
             resolved_model = (manifest_path.parent / resolved_model).resolve()
-        if not resolved_model.exists():
-            continue
         resolved_scaler = None
         if scaler_path:
             resolved_scaler = Path(scaler_path)
             if not resolved_scaler.is_absolute():
                 resolved_scaler = (manifest_path.parent / resolved_scaler).resolve()
-            if not resolved_scaler.exists():
-                resolved_scaler = None
         fold = str(entry.get("fold", "all")).strip() or "all"
         model_dir = resolved_model.parent
         bundle = _ModelBundle(
@@ -802,9 +833,6 @@ def _load_manifest_spec():
             temperature=_load_temperature_from_model_dir(model_dir),
         )
         bundles_by_fold.setdefault(fold, []).append(bundle)
-
-    if not bundles_by_fold:
-        return None
 
     return {
         "manifest_name": str(payload.get("name", "video_level_manifest")),

@@ -9,7 +9,7 @@ The backend provides:
 - `GET /results/{analysis_id}` for stored results
 - `GET /health` for readiness checks
 
-The default inference path uses the live frame-level CFN pipeline. Optional video-level Step46 scorers remain available, but they are opt-in.
+The default inference path uses the checked-in Step46 model assets in `backend/models/`.
 
 ## Local Setup
 
@@ -51,13 +51,15 @@ Key settings:
 - `CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST`
 - `CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR`
 
-In the current checked-in configuration, the live frame pipeline is the default for both local runs and deployment. Enable `CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST=true` or `CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR=true` only when you intentionally want those video-level overrides.
+In the current checked-in configuration, the Step46 ensemble manifest remains the safe default runtime path.
 
 ## Hosted Backend
 
 - `https://causalx-backend.onrender.com`
 
 Because the hosted service is on a free Render instance, cold starts and long analysis timeouts can happen.
+
+If you deploy with the repo-root [render.yaml](/Users/venturit/Documents/GitHub/FYP/CausalX-Project/render.yaml), Render is pinned to the same live-pipeline env as local. For an already-created manual Render service, mirror the same backend env values in the dashboard.
 
 ## Project Files Worth Keeping
 

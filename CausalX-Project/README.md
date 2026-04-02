@@ -4,7 +4,7 @@ CausalX is a deepfake-analysis prototype with:
 
 - a FastAPI backend for upload, inference, and result retrieval
 - a Vite/React frontend for the analysis UI
-- a live frame-level CFN pipeline by default, with optional Step46 video-level scorers available when explicitly enabled
+- checked-in Step46 model artifacts for the default local/runtime scoring path
 
 ## Repo Layout
 
@@ -54,8 +54,10 @@ The frontend defaults to the local backend at `http://127.0.0.1:8000`.
 
 The hosted services run on free Render instances, so cold starts and long video timeouts are expected.
 
+The repo-root [render.yaml](/Users/venturit/Documents/GitHub/FYP/CausalX-Project/render.yaml) pins the backend deployment to the same live-pipeline env used locally.
+
 ## Notes
 
-- The default scoring path is the live frame pipeline; video-level Step46 scorers are opt-in via backend env settings.
+- The default scoring path expects the checked-in Step46 assets under `backend/models/`.
 - Local uploads, caches, previews, and build outputs are generated at runtime and should not be committed.
 - Notebook and experiment history is kept under `backend/notebooks/` and `backend/evidence/`.

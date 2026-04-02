@@ -1,5 +1,7 @@
 import os
+import asyncio
 
+from src.cvi.api import main
 from src.cvi.api.main import _safe_upload_path
 from src.cvi.pipeline import summarize_video
 
@@ -38,3 +40,21 @@ def test_summarize_video_uses_causal_flags():
     assert video_fake == 1
     assert confidence == 0.5  # two of four frames flagged via causal_break
     assert highlights == [0.0, 0.1]
+
+
+def test_health_check_reports_runtime_pipeline(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "get_runtime_pipeline_summary",
+        lambda: {
+            "decision_pipeline": "live_frame_pipeline",
+            "video_level_mode": "disabled",
+            "video_level_default_tabular_enabled": False,
+            "video_level_default_manifest_enabled": False,
+        },
+    )
+
+    payload = asyncio.run(main.health_check())
+
+    assert payload["status"] == "ok"
+    assert payload["decision_pipeline"] == "live_frame_pipeline"

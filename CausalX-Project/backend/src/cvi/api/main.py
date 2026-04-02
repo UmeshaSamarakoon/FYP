@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+import json
 import shutil
 import os
 import uuid
@@ -14,6 +15,7 @@ from src.cvi.api.video_preview import (
     ensure_video_preview,
     preview_path_for_analysis,
 )
+from src.cvi.video_level_cfn import get_runtime_pipeline_summary
 from src.cvi.storage.results_store import get_result, list_results, save_result
 from src.cvi.storage.logs_store import list_logs, log_event
 
@@ -46,6 +48,10 @@ def startup_worker():
     # Keep preview storage bounded across restarts, then start the async worker
     # used by the polling-based analysis flow.
     cleanup_preview_cache(force=True)
+    print(
+        "CausalX startup pipeline summary:",
+        json.dumps(get_runtime_pipeline_summary(), sort_keys=True),
+    )
     worker.start()
 
 
@@ -56,7 +62,7 @@ def shutdown_worker():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", **get_runtime_pipeline_summary()}
 
 
 @app.get("/preview/{analysis_id}")
