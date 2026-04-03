@@ -107,6 +107,7 @@ async def analyze_video(file: UploadFile = File(...)):
             "decision_source": pipeline_output.get("decision_source"),
             "legacy_fake_ratio": pipeline_output.get("legacy_fake_ratio"),
             "calibrator_score": pipeline_output.get("calibrator_score"),
+            "runtime_diagnostics": pipeline_output.get("runtime_diagnostics"),
             "preview_url": preview_url,
             "highlight_timestamps": pipeline_output.get("highlight_timestamps", []),
             "causal_segments": pipeline_output.get("causal_segments", []),

@@ -37,6 +37,8 @@ except Exception as exc:  # noqa: BLE001
     warnings.warn(f"FaceMesh init failed; frame-level features disabled: {exc}")
     FACE_MESH = None
 _FACE_MESH_FALLBACK_WARNED = False
+_LAST_AUDIO_LOAD_BACKEND = "uninitialized"
+_LAST_EXTRACT_DIAGNOSTICS = {}
 
 LIP_TOP, LIP_BOTTOM = 13, 14
 LIP_IDX = list(range(0, 468))
@@ -74,8 +76,11 @@ def get_video_meta(video_path):
 
 
 def _load_audio_with_ffmpeg_fallback(path, offset, duration):
+    global _LAST_AUDIO_LOAD_BACKEND
     try:
-        return librosa.load(path, sr=None, offset=offset, duration=duration)
+        y, sr = librosa.load(path, sr=None, offset=offset, duration=duration)
+        _LAST_AUDIO_LOAD_BACKEND = "librosa"
+        return y, sr
     except Exception as e:
         warnings.warn(f"Primary audio load failed ({e}); trying ffmpeg wav fallback")
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp:
@@ -95,14 +100,48 @@ def _load_audio_with_ffmpeg_fallback(path, offset, duration):
             ]
             try:
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return librosa.load(tmp.name, sr=None, offset=offset, duration=duration)
+                y, sr = librosa.load(tmp.name, sr=None, offset=offset, duration=duration)
+                _LAST_AUDIO_LOAD_BACKEND = "ffmpeg_wav"
+                return y, sr
             except Exception as e2:
                 warnings.warn(f"Audio extraction failed for {path}: {e2}; using silence fallback")
                 sr = 16000
                 # Ensure at least one analysis frame for librosa.feature.rms
                 length = int(sr * float(duration)) if duration else 2048
                 length = max(length, 2048)
+                _LAST_AUDIO_LOAD_BACKEND = "silence"
                 return np.zeros(length, dtype=np.float32), sr
+
+
+def _record_extract_diagnostics(
+    *,
+    source_fps,
+    target_fps,
+    stride,
+    start_time,
+    duration,
+    frame_count,
+    used_facemesh_fallback,
+):
+    global _LAST_EXTRACT_DIAGNOSTICS
+    audio_backend = _LAST_AUDIO_LOAD_BACKEND
+    _LAST_EXTRACT_DIAGNOSTICS = {
+        "facemesh_available": bool(FACE_MESH is not None),
+        "used_facemesh_fallback": bool(used_facemesh_fallback),
+        "audio_backend": str(audio_backend),
+        "audio_ffmpeg_fallback_used": audio_backend == "ffmpeg_wav",
+        "audio_silence_fallback_used": audio_backend == "silence",
+        "source_fps": float(source_fps),
+        "target_fps": (float(target_fps) if target_fps is not None else None),
+        "sampling_stride": int(stride),
+        "start_time": float(start_time),
+        "requested_duration": (float(duration) if duration is not None else None),
+        "extracted_frame_count": int(frame_count),
+    }
+
+
+def get_last_extract_diagnostics():
+    return dict(_LAST_EXTRACT_DIAGNOSTICS)
 
 
 def _extract_frame_level_features_without_facemesh(
@@ -236,6 +275,15 @@ def _extract_frame_level_features_without_facemesh(
         frame_idx += 1
 
     cap.release()
+    _record_extract_diagnostics(
+        source_fps=fps,
+        target_fps=target_fps,
+        stride=stride,
+        start_time=start_time,
+        duration=duration,
+        frame_count=len(frames),
+        used_facemesh_fallback=True,
+    )
     return frames
 
 
@@ -419,6 +467,15 @@ def extract_frame_level_features(
         frame_idx += 1
 
     cap.release()
+    _record_extract_diagnostics(
+        source_fps=fps,
+        target_fps=target_fps,
+        stride=stride,
+        start_time=start_time,
+        duration=duration,
+        frame_count=len(frames),
+        used_facemesh_fallback=False,
+    )
     return frames
 
 def compute_av_mismatch(frames, window=5):

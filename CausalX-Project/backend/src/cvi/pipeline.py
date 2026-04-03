@@ -9,7 +9,7 @@ from src.cvi.frame_causal_extractor import (
     compute_av_mismatch,
     get_video_meta,
 )
-from src.cvi.cfn_frame_inference import run_cfn_on_video
+from src.cvi.cfn_frame_inference import get_last_run_diagnostics, run_cfn_on_video
 from src.cvi.feature_extractor import FeatureExtractor  
 from src.cvi.fakeav_benchmark_resolver import resolve_fakeav_benchmark_match
 from src.cvi.video_level_cfn import score_video_level_cfn
@@ -377,6 +377,10 @@ class CausalInferenceEngine:
                 "legacy_fake_ratio": 0.0,
                 "calibrator_score": None,
                 "video_level_score": None,
+                "runtime_diagnostics": {
+                    "benchmark_override_used": True,
+                    "benchmark_override_match_type": benchmark_match.match_type,
+                },
                 "benchmark_match": {
                     "scenario": benchmark_match.scenario,
                     "canonical_path": benchmark_match.canonical_path,
@@ -401,6 +405,7 @@ class CausalInferenceEngine:
             target_fps=self.target_fps,
             include_bboxes=self.include_bboxes,
         )
+        runtime_diagnostics = get_last_run_diagnostics()
 
         frame_results, prob_key = smooth_fake_probs(frame_results, self.smooth_window)
         frame_results = add_causal_breaks(frame_results, causal_thresh=self.causal_thresh)
@@ -496,6 +501,7 @@ class CausalInferenceEngine:
                 if video_level_score is not None
                 else None
             ),
+            "runtime_diagnostics": runtime_diagnostics,
             "benchmark_match": (
                 {
                     "scenario": benchmark_match.scenario,

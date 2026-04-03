@@ -82,6 +82,11 @@ def test_benchmark_override_disabled_by_default(monkeypatch):
             {"timestamp": 0.1, "fake_prob": 0.2, "av_mismatch": 0.1},
         ],
     )
+    monkeypatch.setattr(
+        pipeline,
+        "get_last_run_diagnostics",
+        lambda: {"used_facemesh_fallback": False, "audio_backends": ["librosa"]},
+    )
     monkeypatch.setattr(pipeline, "score_video_level_cfn", lambda _path: None)
 
     engine = CausalInferenceEngine(
@@ -99,6 +104,7 @@ def test_benchmark_override_disabled_by_default(monkeypatch):
 
     assert output["decision_source"] == "threshold_rule"
     assert output["benchmark_match"] is None
+    assert output["runtime_diagnostics"]["audio_backends"] == ["librosa"]
 
 
 def test_benchmark_override_can_be_enabled_explicitly(monkeypatch):
@@ -129,3 +135,4 @@ def test_benchmark_override_can_be_enabled_explicitly(monkeypatch):
 
     assert output["decision_source"] == "fakeav_benchmark_hash"
     assert output["benchmark_match"]["match_type"] == "hash"
+    assert output["runtime_diagnostics"]["benchmark_override_used"] is True

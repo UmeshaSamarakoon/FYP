@@ -12,7 +12,8 @@ from src.cvi.feature_extractor import FeatureExtractor
 from src.cvi.frame_causal_extractor import (
     extract_frame_level_features,
     compute_av_sync_signals,
-    get_video_meta
+    get_last_extract_diagnostics,
+    get_video_meta,
 )
 from src.cvi.feature_schema import (
     BASELINE_AV_FEATURES,
@@ -59,6 +60,7 @@ _TEMP_SCALE_FALLBACK = float(os.getenv("CFN_TEMP_SCALE", "1.0"))
 _TEMP_SCALE_PATH = os.getenv("CFN_TEMP_SCALE_PATH", "").strip() or None
 _RUNTIME_TEMP_SCALE = None
 _FEATURE_Z_CLIP = float(os.getenv("CFN_FEATURE_Z_CLIP", "5.0"))
+_LAST_RUN_DIAGNOSTICS = {}
 
 
 def _use_embeddings() -> bool:
@@ -514,6 +516,15 @@ def _model_forward(model, av_tensor, phys_tensor, lip_tensor=None):
         return model(av_tensor, phys_tensor)
 
 
+def _reset_last_run_diagnostics():
+    global _LAST_RUN_DIAGNOSTICS
+    _LAST_RUN_DIAGNOSTICS = {}
+
+
+def get_last_run_diagnostics():
+    return dict(_LAST_RUN_DIAGNOSTICS)
+
+
 def run_cfn_on_video(
     video_path,
     threshold=0.247707,
@@ -529,7 +540,10 @@ def run_cfn_on_video(
     bboxes on frames flagged as fake.
     """
 
+    global _LAST_RUN_DIAGNOSTICS
+
     _load_artifacts()
+    _reset_last_run_diagnostics()
 
     fps, duration = get_video_meta(video_path)
     if max_seconds is not None:
@@ -542,6 +556,7 @@ def run_cfn_on_video(
         total_duration = chunk_seconds
 
     results = []
+    chunk_diagnostics = []
     chunk_start = 0.0
 
     feature_extractor = FeatureExtractor()
@@ -560,6 +575,9 @@ def run_cfn_on_video(
             include_frame=include_bboxes,
             include_landmarks=include_bboxes,
         )
+        extract_diag = get_last_extract_diagnostics()
+        if extract_diag:
+            chunk_diagnostics.append(extract_diag)
 
         if len(frames) == 0:
             chunk_start += current_chunk
@@ -709,5 +727,29 @@ def run_cfn_on_video(
                 results.append(row)
 
         chunk_start += current_chunk
+
+    audio_backends = []
+    for diag in chunk_diagnostics:
+        backend = diag.get("audio_backend")
+        if backend and backend not in audio_backends:
+            audio_backends.append(str(backend))
+
+    _LAST_RUN_DIAGNOSTICS = {
+        "source_fps": float(fps),
+        "source_duration_seconds": float(duration),
+        "evaluated_duration_seconds": float(total_duration),
+        "chunk_seconds": float(chunk_seconds),
+        "max_seconds": (float(max_seconds) if max_seconds is not None else None),
+        "target_fps": (float(target_fps) if target_fps is not None else None),
+        "chunk_count": int(len(chunk_diagnostics)),
+        "extracted_frame_count": int(len(results)),
+        "temp_scale": float(runtime_temp),
+        "t2a_enabled": bool(_T2A_ENABLE),
+        "audio_backends": audio_backends,
+        "used_facemesh_fallback": any(bool(diag.get("used_facemesh_fallback")) for diag in chunk_diagnostics),
+        "audio_ffmpeg_fallback_used": any(bool(diag.get("audio_ffmpeg_fallback_used")) for diag in chunk_diagnostics),
+        "audio_silence_fallback_used": any(bool(diag.get("audio_silence_fallback_used")) for diag in chunk_diagnostics),
+        "chunks": chunk_diagnostics,
+    }
 
     return results
