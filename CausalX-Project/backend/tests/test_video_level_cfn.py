@@ -116,6 +116,18 @@ def test_video_level_tabular_scorer_gate(tmp_path, monkeypatch):
     assert score.fake_prob >= 0.5
 
 
+def test_video_level_default_tabular_is_disabled_when_env_is_unset(tmp_path, monkeypatch):
+    scorer_path = tmp_path / "default_tabular.joblib"
+    _write_tabular_scorer(scorer_path, constant_label=1)
+    _reset_video_level_caches()
+
+    monkeypatch.setattr(video_level_cfn, "_DEFAULT_TABULAR_SCORER_PATH", scorer_path)
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_TABULAR_SCORER_PATH", raising=False)
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR", raising=False)
+
+    assert video_level_cfn._resolve_tabular_scorer_path() is None
+
+
 def test_video_level_temporal_scorer_gate(tmp_path, monkeypatch):
     scorer_path = tmp_path / "temporal.pt"
     _write_temporal_scorer(scorer_path, bias=2.0)
@@ -204,7 +216,7 @@ def test_video_level_cfn_default_manifest_is_used_when_present(tmp_path, monkeyp
     monkeypatch.delenv("CFN_VIDEO_LEVEL_SELECTION_JSON", raising=False)
     monkeypatch.delenv("CFN_VIDEO_LEVEL_ENSEMBLE_MANIFEST_PATH", raising=False)
     monkeypatch.delenv("CFN_VIDEO_LEVEL_RUNTIME_CALIBRATION_JSON", raising=False)
-    monkeypatch.delenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", raising=False)
+    monkeypatch.setenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", "true")
     monkeypatch.setenv("CFN_VIDEO_LEVEL_PRECOMPUTE_DIR", str(tmp_path / "precompute"))
     monkeypatch.setattr(
         video_level_cfn,
@@ -238,6 +250,33 @@ def test_video_level_cfn_can_disable_default_manifest(monkeypatch):
     score = video_level_cfn.score_video_level_cfn("clip.mp4")
 
     assert score is None
+
+
+def test_video_level_default_manifest_is_disabled_when_env_is_unset(tmp_path, monkeypatch):
+    model_dir = tmp_path / "manifest-model"
+    _write_model_dir(model_dir, bias=2.0)
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "name": "test-manifest",
+                "artifacts": [
+                    {
+                        "fold": "fold_01",
+                        "model_path": str(model_dir / "cfn_emb.pth"),
+                        "scaler_path": None,
+                    }
+                ],
+            }
+        )
+    )
+    _reset_video_level_caches()
+
+    monkeypatch.setattr(video_level_cfn, "_DEFAULT_MANIFEST_PATH", manifest_path)
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_ENSEMBLE_MANIFEST_PATH", raising=False)
+    monkeypatch.delenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", raising=False)
+
+    assert video_level_cfn._resolve_manifest_path() is None
 
 
 def test_video_level_cfn_runtime_calibration_overrides_manifest_threshold(tmp_path, monkeypatch):
@@ -277,7 +316,7 @@ def test_video_level_cfn_runtime_calibration_overrides_manifest_threshold(tmp_pa
     monkeypatch.delenv("CFN_VIDEO_LEVEL_SELECTION_JSON", raising=False)
     monkeypatch.delenv("CFN_VIDEO_LEVEL_ENSEMBLE_MANIFEST_PATH", raising=False)
     monkeypatch.delenv("CFN_VIDEO_LEVEL_RUNTIME_CALIBRATION_JSON", raising=False)
-    monkeypatch.delenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", raising=False)
+    monkeypatch.setenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", "true")
     monkeypatch.setenv("CFN_VIDEO_LEVEL_PRECOMPUTE_DIR", str(tmp_path / "precompute"))
     monkeypatch.setattr(
         video_level_cfn,

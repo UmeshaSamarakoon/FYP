@@ -468,9 +468,7 @@ def _resolve_tabular_scorer_path() -> Path | None:
         p = Path(explicit).expanduser()
         return p if p.exists() else None
     allow_default_raw = os.getenv("CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR", "").strip().lower()
-    if allow_default_raw in {"0", "false", "no", "off"}:
-        return None
-    allow_default = allow_default_raw in {"", "1", "true", "yes", "on"}
+    allow_default = allow_default_raw in {"1", "true", "yes", "on"}
     if allow_default and _DEFAULT_TABULAR_SCORER_PATH.exists():
         return _DEFAULT_TABULAR_SCORER_PATH
     return None
@@ -677,9 +675,7 @@ def _resolve_manifest_path() -> Path | None:
         p = Path(explicit).expanduser()
         return p if p.exists() else None
     allow_default_raw = os.getenv("CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST", "").strip().lower()
-    if allow_default_raw in {"0", "false", "no", "off"}:
-        return None
-    allow_default = allow_default_raw in {"", "1", "true", "yes", "on"}
+    allow_default = allow_default_raw in {"1", "true", "yes", "on"}
     if allow_default and _DEFAULT_MANIFEST_PATH.exists():
         return _DEFAULT_MANIFEST_PATH
     return None
