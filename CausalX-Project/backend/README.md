@@ -50,10 +50,11 @@ Key settings:
 - `CFN_RATIO_THRESH`
 - `CFN_CAUSAL_THRESH`
 - `CFN_REQUIRE_FLAG`
+- `CFN_ENABLE_BENCHMARK_OVERRIDE`
 - `CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST`
 - `CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR`
 
-In the current checked-in configuration, the live frame pipeline is the default for both local runs and deployment. The checked-in multiseed Step46 manifest is not the default runtime path.
+In the current checked-in configuration, the live frame pipeline is the default for both local runs and deployment. The checked-in multiseed Step46 manifest is not the default runtime path, and the FakeAV benchmark override is disabled by default for production parity.
 
 ## Hosted Backend
 

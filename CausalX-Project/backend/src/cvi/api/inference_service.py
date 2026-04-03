@@ -61,8 +61,8 @@ TARGET_FPS_ENV = os.getenv("CFN_TARGET_FPS")
 # Keep pipeline feature behavior unchanged unless explicitly overridden.
 TARGET_FPS = _safe_float(TARGET_FPS_ENV, None)
 INCLUDE_BBOXES = os.getenv("CFN_INCLUDE_BBOXES", "true").lower() == "true"
-# Default to OR rule because latest full-manifest sweep picked it as best.
-REQUIRE_FLAG = os.getenv("CFN_REQUIRE_FLAG", "false").lower() == "true"
+# Default to AND rule to reduce false positives in real-world uploads.
+REQUIRE_FLAG = os.getenv("CFN_REQUIRE_FLAG", "true").lower() == "true"
 VIDEO_CALIBRATOR_PATH = os.getenv("CFN_VIDEO_CALIBRATOR_PATH", "").strip() or None
 CALIBRATOR_THRESH = float(os.getenv("CFN_CALIBRATOR_THRESH", "0.50"))
 # Optional frame-level calibration / source-free test-time adaptation (handled in cfn_frame_inference).

@@ -1,5 +1,6 @@
 import os
 import sys
+import importlib
 from pathlib import Path
 
 import numpy as np
@@ -56,3 +57,12 @@ def test_frame_inference_defaults_to_single_checkpoint_when_manifest_not_explici
 
     assert cfn_frame_inference._resolve_manifest_path(single_model_override="") is None
     assert cfn_frame_inference._resolve_model_paths_for_threshold() == [cfn_frame_inference._DEFAULT_EMB_MODEL_PATH]
+
+
+def test_require_flag_defaults_to_true(monkeypatch):
+    monkeypatch.delenv("CFN_REQUIRE_FLAG", raising=False)
+    reloaded = importlib.reload(inference_service)
+    try:
+        assert reloaded.REQUIRE_FLAG is True
+    finally:
+        importlib.reload(inference_service)

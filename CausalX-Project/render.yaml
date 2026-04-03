@@ -14,6 +14,10 @@ services:
         value: models/cfn_emb.pth
       - key: CFN_SCALER_PATH
         value: models/cfn_scaler.pkl
+      - key: CFN_REQUIRE_FLAG
+        value: "true"
+      - key: CFN_ENABLE_BENCHMARK_OVERRIDE
+        value: "false"
       - key: CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR
         value: "false"
       - key: CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST

@@ -207,6 +207,10 @@ def overall_video_score(frames, prob_key="fake_prob"):
     return float(np.mean([f.get(prob_key, 0.0) for f in frames]))
 
 
+def _benchmark_override_enabled() -> bool:
+    return os.getenv("CFN_ENABLE_BENCHMARK_OVERRIDE", "false").strip().lower() == "true"
+
+
 def build_video_feature_vector(frames, prob_key="fake_prob"):
     """
     Build a compact video-level feature vector from frame-level signals.
@@ -356,7 +360,7 @@ class CausalInferenceEngine:
         return None
 
     def run(self, video_path: str):
-        benchmark_match = resolve_fakeav_benchmark_match(video_path)
+        benchmark_match = resolve_fakeav_benchmark_match(video_path) if _benchmark_override_enabled() else None
         # Known benchmark reals are short-circuited so evaluation clips use
         # their canonical labels instead of wasting time on full inference.
         if benchmark_match is not None and int(benchmark_match.label) == 0:
