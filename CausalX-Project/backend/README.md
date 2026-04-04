@@ -9,7 +9,7 @@ The backend provides:
 - `GET /results/{analysis_id}` for stored results
 - `GET /health` for readiness checks
 
-The default inference path uses the tracked single-checkpoint CFN backbone in `backend/models/cfn_emb.pth` plus `backend/models/cfn_scaler.pkl`. Optional video-level Step46 scorers remain available, but they are opt-in.
+The backend uses the tracked single-checkpoint CFN backbone in `backend/models/cfn_emb.pth` plus `backend/models/cfn_scaler.pkl`, and can optionally apply a video-level Step46 scorer on top of those live-precompute features.
 
 ## Local Setup
 
@@ -47,14 +47,14 @@ Key settings:
 
 - `CFN_EMB_MODEL_PATH`
 - `CFN_SCALER_PATH`
+- `CFN_VIDEO_LEVEL_TABULAR_SCORER_PATH`
 - `CFN_RATIO_THRESH`
 - `CFN_CAUSAL_THRESH`
 - `CFN_REQUIRE_FLAG`
-- `CFN_ENABLE_BENCHMARK_OVERRIDE`
 - `CFN_VIDEO_LEVEL_USE_DEFAULT_MANIFEST`
 - `CFN_VIDEO_LEVEL_USE_DEFAULT_TABULAR`
 
-In the current checked-in configuration, the live frame pipeline is the default for both local runs and deployment. The checked-in multiseed Step46 manifest is not the default runtime path, and the FakeAV benchmark override is disabled by default for production parity.
+In the current checked-in configuration, deployment is pinned to an explicit runtime-extra tabular scorer trained on balanced FakeAVCeleb Step46 rows. The multiseed Step46 manifest remains non-default.
 
 ## Hosted Backend
 

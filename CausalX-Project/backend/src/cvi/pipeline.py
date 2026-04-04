@@ -10,9 +10,9 @@ from src.cvi.frame_causal_extractor import (
     get_video_meta,
 )
 from src.cvi.cfn_frame_inference import get_last_run_diagnostics, run_cfn_on_video
-from src.cvi.feature_extractor import FeatureExtractor  
-from src.cvi.fakeav_benchmark_resolver import resolve_fakeav_benchmark_match
+from src.cvi.feature_extractor import FeatureExtractor
 from src.cvi.video_level_cfn import score_video_level_cfn
+from src.cvi.video_calibrator_features import build_video_feature_vector
 from src.cvi.scm import run_scm
 
 
@@ -207,64 +207,6 @@ def overall_video_score(frames, prob_key="fake_prob"):
     return float(np.mean([f.get(prob_key, 0.0) for f in frames]))
 
 
-def _benchmark_override_enabled() -> bool:
-    return os.getenv("CFN_ENABLE_BENCHMARK_OVERRIDE", "false").strip().lower() == "true"
-
-
-def build_video_feature_vector(frames, prob_key="fake_prob"):
-    """
-    Build a compact video-level feature vector from frame-level signals.
-    This keeps the feature extraction pipeline unchanged and only adds a
-    lightweight decision layer on top.
-    """
-    if not frames:
-        return np.zeros(15, dtype=np.float32)
-
-    probs = np.array([f.get(prob_key, 0.0) for f in frames], dtype=np.float32)
-    mism = np.array([f.get("av_mismatch", 0.0) for f in frames], dtype=np.float32)
-    probs = np.nan_to_num(probs, nan=0.0, posinf=1.0, neginf=0.0)
-    mism = np.nan_to_num(mism, nan=0.0, posinf=1.0, neginf=0.0)
-
-    def _stats(x):
-        return (
-            float(np.mean(x)),
-            float(np.std(x)),
-            float(np.percentile(x, 90)),
-            float(np.percentile(x, 95)),
-            float(np.max(x)),
-        )
-
-    p_mean, p_std, p_p90, p_p95, p_max = _stats(probs)
-    m_mean, m_std, m_p90, m_p95, m_max = _stats(mism)
-
-    p_std_val = float(np.std(probs))
-    m_std_val = float(np.std(mism))
-    if len(probs) > 1 and p_std_val > 1e-8 and m_std_val > 1e-8:
-        p_center = probs - float(np.mean(probs))
-        m_center = mism - float(np.mean(mism))
-        corr = float(np.mean(p_center * m_center) / (p_std_val * m_std_val))
-        if not np.isfinite(corr):
-            corr = 0.0
-    else:
-        corr = 0.0
-
-    ratio_p70 = float(np.mean(probs >= 0.70))
-    ratio_p80 = float(np.mean(probs >= 0.80))
-    ratio_m70 = float(np.mean(mism >= 0.70))
-    ratio_m80 = float(np.mean(mism >= 0.80))
-
-    return np.array(
-        [
-            p_mean, p_std, p_p90, p_p95, p_max,
-            m_mean, m_std, m_p90, m_p95, m_max,
-            corr,
-            ratio_p70, ratio_p80,
-            ratio_m70, ratio_m80,
-        ],
-        dtype=np.float32,
-    )
-
-
 @dataclass
 class FeatureExtractor:
     """
@@ -360,34 +302,6 @@ class CausalInferenceEngine:
         return None
 
     def run(self, video_path: str):
-        benchmark_match = resolve_fakeav_benchmark_match(video_path) if _benchmark_override_enabled() else None
-        # Known benchmark reals are short-circuited so evaluation clips use
-        # their canonical labels instead of wasting time on full inference.
-        if benchmark_match is not None and int(benchmark_match.label) == 0:
-            return {
-                "video_fake": 0,
-                "fake_confidence": 0.0,
-                "overall_score": 0.0,
-                "highlight_timestamps": [],
-                "causal_segments": [],
-                "causal_breach_score": 0.0,
-                "frames": [],
-                "scm_enabled": self.enable_scm,
-                "decision_source": f"fakeav_benchmark_{benchmark_match.match_type}",
-                "legacy_fake_ratio": 0.0,
-                "calibrator_score": None,
-                "video_level_score": None,
-                "runtime_diagnostics": {
-                    "benchmark_override_used": True,
-                    "benchmark_override_match_type": benchmark_match.match_type,
-                },
-                "benchmark_match": {
-                    "scenario": benchmark_match.scenario,
-                    "canonical_path": benchmark_match.canonical_path,
-                    "match_type": benchmark_match.match_type,
-                },
-            }
-
         # Load any optional video-level calibrator before frame inference so its
         # learned blending weights can influence causal breach scoring.
         self._load_calibrator()
@@ -458,13 +372,6 @@ class CausalInferenceEngine:
         overall_score = overall_video_score(frame_results, prob_key=prob_key)
         causal_breach_score = overall_video_score(frame_results, prob_key="causal_breach_score")
 
-        if benchmark_match is not None:
-            # For matched benchmark clips, use the benchmark label as the final
-            # authority even after inference has run.
-            video_fake = int(benchmark_match.label)
-            confidence = 1.0 if video_fake else 0.0
-            decision_source = f"fakeav_benchmark_{benchmark_match.match_type}"
-
         # The UI only visualizes breach evidence for fake decisions; clearing it
         # for real outputs avoids contradictory "real but highlighted" results.
         if not video_fake:
@@ -502,15 +409,6 @@ class CausalInferenceEngine:
                 else None
             ),
             "runtime_diagnostics": runtime_diagnostics,
-            "benchmark_match": (
-                {
-                    "scenario": benchmark_match.scenario,
-                    "canonical_path": benchmark_match.canonical_path,
-                    "match_type": benchmark_match.match_type,
-                }
-                if benchmark_match is not None
-                else None
-            ),
         }
 
 

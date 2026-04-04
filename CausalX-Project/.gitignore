@@ -31,6 +31,8 @@ backend/models/**/*.bin
 backend/models/**/*.h5
 backend/models/**/*.onnx
 backend/models/**/*.joblib
+!backend/models/video_calibrator.pkl
+!backend/models/fakeavceleb_runtimeparity_plus_facemesh_balanced_runtimeextra_tabular.joblib
 
 # Experiment raw training artifacts
 backend/models/experiment_logs/**/*.train.log
