@@ -3,6 +3,7 @@ import sys
 import importlib
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pytest
 
@@ -66,3 +67,21 @@ def test_require_flag_defaults_to_true(monkeypatch):
         assert reloaded.REQUIRE_FLAG is True
     finally:
         importlib.reload(inference_service)
+
+
+def test_default_video_calibrator_is_used_when_tracked_file_exists(tmp_path, monkeypatch):
+    calibrator_path = tmp_path / "video_calibrator.pkl"
+    joblib.dump({"threshold": 0.535, "model": object()}, calibrator_path)
+
+    monkeypatch.delenv("CFN_VIDEO_CALIBRATOR_PATH", raising=False)
+    monkeypatch.delenv("CFN_CALIBRATOR_THRESH", raising=False)
+    monkeypatch.setattr(inference_service, "_DEFAULT_VIDEO_CALIBRATOR_PATH", calibrator_path)
+
+    assert inference_service._resolve_video_calibrator_path() == str(calibrator_path)
+    assert inference_service._resolve_calibrator_thresh(str(calibrator_path)) == pytest.approx(0.535)
+
+
+def test_explicit_calibrator_threshold_override_wins(monkeypatch):
+    monkeypatch.setenv("CFN_CALIBRATOR_THRESH", "0.61")
+
+    assert inference_service._resolve_calibrator_thresh(None) == pytest.approx(0.61)

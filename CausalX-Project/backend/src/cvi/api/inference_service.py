@@ -1,5 +1,6 @@
 import math
 import os
+from pathlib import Path
 
 from src.cvi.cfn_frame_inference import resolve_default_probability_threshold
 from src.cvi.pipeline import (
@@ -26,6 +27,8 @@ def _safe_int(value, default):
         return default
 
 _DEFAULT_PROB_THRESH = 0.60
+_MODULE_DIR = Path(__file__).resolve().parents[2]
+_DEFAULT_VIDEO_CALIBRATOR_PATH = _MODULE_DIR / "models" / "video_calibrator.pkl"
 
 
 def _resolve_prob_thresh():
@@ -47,6 +50,43 @@ def _resolve_prob_thresh():
     return _DEFAULT_PROB_THRESH
 
 
+def _resolve_video_calibrator_path():
+    env_val = os.getenv("CFN_VIDEO_CALIBRATOR_PATH", "").strip()
+    if env_val:
+        return env_val
+    if _DEFAULT_VIDEO_CALIBRATOR_PATH.exists():
+        return str(_DEFAULT_VIDEO_CALIBRATOR_PATH)
+    return None
+
+
+def _resolve_calibrator_thresh(calibrator_path, default=0.50):
+    env_val = os.getenv("CFN_CALIBRATOR_THRESH", "").strip()
+    if env_val:
+        try:
+            val = float(env_val)
+            if math.isfinite(val):
+                return val
+        except (TypeError, ValueError):
+            pass
+    if not calibrator_path:
+        return default
+    try:
+        import joblib
+
+        payload = joblib.load(calibrator_path)
+    except Exception:
+        return default
+
+    if isinstance(payload, dict):
+        try:
+            threshold = float(payload.get("threshold", default))
+            if math.isfinite(threshold):
+                return threshold
+        except (TypeError, ValueError):
+            pass
+    return default
+
+
 PROB_THRESH = _resolve_prob_thresh()
 RATIO_THRESH = float(os.getenv("CFN_RATIO_THRESH", "0.80"))
 SMOOTH_WINDOW = int(os.getenv("CFN_SMOOTH_WINDOW", "5"))
@@ -63,8 +103,8 @@ TARGET_FPS = _safe_float(TARGET_FPS_ENV, None)
 INCLUDE_BBOXES = os.getenv("CFN_INCLUDE_BBOXES", "true").lower() == "true"
 # Default to AND rule to reduce false positives in real-world uploads.
 REQUIRE_FLAG = os.getenv("CFN_REQUIRE_FLAG", "true").lower() == "true"
-VIDEO_CALIBRATOR_PATH = os.getenv("CFN_VIDEO_CALIBRATOR_PATH", "").strip() or None
-CALIBRATOR_THRESH = float(os.getenv("CFN_CALIBRATOR_THRESH", "0.50"))
+VIDEO_CALIBRATOR_PATH = _resolve_video_calibrator_path()
+CALIBRATOR_THRESH = _resolve_calibrator_thresh(VIDEO_CALIBRATOR_PATH)
 # Optional frame-level calibration / source-free test-time adaptation (handled in cfn_frame_inference).
 TEMP_SCALE = float(os.getenv("CFN_TEMP_SCALE", "1.0"))
 TEMP_SCALE_PATH = os.getenv("CFN_TEMP_SCALE_PATH", "").strip() or None

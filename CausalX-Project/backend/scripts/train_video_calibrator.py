@@ -11,81 +11,20 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
 
 import joblib
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-FEATURE_NAMES = [
-    "prob_mean",
-    "prob_std",
-    "prob_p90",
-    "prob_p95",
-    "prob_max",
-    "mism_mean",
-    "mism_std",
-    "mism_p90",
-    "mism_p95",
-    "mism_max",
-    "prob_mism_corr",
-    "ratio_prob_ge_0_70",
-    "ratio_prob_ge_0_80",
-    "ratio_mism_ge_0_70",
-    "ratio_mism_ge_0_80",
-]
-
-
-def build_video_feature_vector(frames, prob_key="fake_prob"):
-    if not frames:
-        return np.zeros(15, dtype=np.float32)
-
-    probs = np.array([f.get(prob_key, 0.0) for f in frames], dtype=np.float32)
-    mism = np.array([f.get("av_mismatch", 0.0) for f in frames], dtype=np.float32)
-    probs = np.nan_to_num(probs, nan=0.0, posinf=1.0, neginf=0.0)
-    mism = np.nan_to_num(mism, nan=0.0, posinf=1.0, neginf=0.0)
-
-    def _stats(x):
-        return (
-            float(np.mean(x)),
-            float(np.std(x)),
-            float(np.percentile(x, 90)),
-            float(np.percentile(x, 95)),
-            float(np.max(x)),
-        )
-
-    p_mean, p_std, p_p90, p_p95, p_max = _stats(probs)
-    m_mean, m_std, m_p90, m_p95, m_max = _stats(mism)
-
-    p_std_val = float(np.std(probs))
-    m_std_val = float(np.std(mism))
-    if len(probs) > 1 and p_std_val > 1e-8 and m_std_val > 1e-8:
-        p_center = probs - float(np.mean(probs))
-        m_center = mism - float(np.mean(mism))
-        corr = float(np.mean(p_center * m_center) / (p_std_val * m_std_val))
-        if not np.isfinite(corr):
-            corr = 0.0
-    else:
-        corr = 0.0
-
-    ratio_p70 = float(np.mean(probs >= 0.70))
-    ratio_p80 = float(np.mean(probs >= 0.80))
-    ratio_m70 = float(np.mean(mism >= 0.70))
-    ratio_m80 = float(np.mean(mism >= 0.80))
-
-    return np.array(
-        [
-            p_mean, p_std, p_p90, p_p95, p_max,
-            m_mean, m_std, m_p90, m_p95, m_max,
-            corr,
-            ratio_p70, ratio_p80,
-            ratio_m70, ratio_m80,
-        ],
-        dtype=np.float32,
-    )
+from src.cvi.video_calibrator_features import FEATURE_NAMES, build_video_feature_vector
 
 
 def _safe_div(a: float, b: float) -> float:
@@ -173,11 +112,52 @@ def _macro_bal(per_ds):
     return float(np.mean([v["bal_acc"] for v in per_ds.values()]))
 
 
+def _build_model(model_c: float) -> Pipeline:
+    return Pipeline(
+        steps=[
+            ("scaler", StandardScaler()),
+            (
+                "clf",
+                LogisticRegression(
+                    C=float(model_c),
+                    max_iter=2000,
+                    class_weight="balanced",
+                ),
+            ),
+        ]
+    )
+
+
+def _select_threshold(y_true, probs, ds, min_rec: float, min_spec: float):
+    best = None
+    for thr in np.linspace(0.05, 0.95, 181):
+        y_hat = (np.asarray(probs, dtype=np.float64) >= float(thr)).astype(int)
+        overall = _metrics(y_true, y_hat)
+        if overall["rec"] < min_rec or overall["spec"] < min_spec:
+            continue
+        per_ds = _per_dataset_metrics(y_true, y_hat, ds)
+        macro_bal = _macro_bal(per_ds)
+        key = (macro_bal, overall["bal_acc"], overall["f1"])
+        if best is None or key > best["key"]:
+            best = {
+                "key": key,
+                "threshold": float(thr),
+                "overall": overall,
+                "per_dataset": per_ds,
+                "macro_bal_acc": macro_bal,
+            }
+    if best is None:
+        raise RuntimeError("No threshold met the requested constraints.")
+    return best
+
+
 def main():
     parser = argparse.ArgumentParser(description="Train video-level CFN decision calibrator from cached frame outputs.")
     parser.add_argument("--cache", default="eval_cache_mixed.json", help="Input cache JSON from mixed_domain_sweep.py")
     parser.add_argument("--out", default="models/video_calibrator.pkl", help="Output calibrator file")
-    parser.add_argument("--test-size", type=float, default=0.25, help="Validation split fraction")
+    parser.add_argument("--holdout-cache", default="", help="Optional held-out cache JSON for reporting only.")
+    parser.add_argument("--cv-folds", type=int, default=5, help="Cross-validation folds used for threshold selection.")
+    parser.add_argument("--model-c", type=float, default=2.0, help="Inverse regularization strength for LogisticRegression.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--min-rec", type=float, default=0.0, help="Optional recall floor for threshold selection")
     parser.add_argument("--min-spec", type=float, default=0.0, help="Optional specificity floor for threshold selection")
@@ -211,47 +191,35 @@ def main():
     if len(X) < 20:
         raise RuntimeError(f"Not enough usable rows in cache: {len(X)}")
 
-    strat = np.array([f"{d}:{yy}" for d, yy in zip(ds, y)], dtype=object)
-    unique, counts = np.unique(strat, return_counts=True)
-    if np.min(counts) < 2:
-        strat = y
+    cv_folds = max(2, int(args.cv_folds))
+    splitter = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=args.seed)
+    oof_probs = np.zeros(len(X), dtype=np.float64)
+    for train_idx, val_idx in splitter.split(X, y):
+        model = _build_model(model_c=args.model_c)
+        model.fit(X[train_idx], y[train_idx])
+        oof_probs[val_idx] = model.predict_proba(X[val_idx])[:, 1]
 
-    X_train, X_val, y_train, y_val, ds_train, ds_val = train_test_split(
-        X, y, ds,
-        test_size=args.test_size,
-        random_state=args.seed,
-        stratify=strat,
+    best = _select_threshold(
+        y_true=y,
+        probs=oof_probs,
+        ds=ds,
+        min_rec=float(args.min_rec),
+        min_spec=float(args.min_spec),
     )
 
-    model = Pipeline(
-        steps=[
-            ("scaler", StandardScaler()),
-            ("clf", LogisticRegression(max_iter=2000, class_weight="balanced")),
-        ]
-    )
-    model.fit(X_train, y_train)
-    p_val = model.predict_proba(X_val)[:, 1]
+    model = _build_model(model_c=args.model_c)
+    model.fit(X, y)
 
-    best = None
-    for thr in np.linspace(0.05, 0.95, 181):
-        y_hat = (p_val >= thr).astype(int)
-        overall = _metrics(y_val, y_hat)
-        if overall["rec"] < args.min_rec or overall["spec"] < args.min_spec:
-            continue
-        per_ds = _per_dataset_metrics(y_val, y_hat, ds_val)
-        macro_bal = _macro_bal(per_ds)
-        key = (macro_bal, overall["bal_acc"], overall["f1"])
-        if best is None or key > best["key"]:
-            best = {
-                "key": key,
-                "threshold": float(thr),
-                "overall": overall,
-                "per_dataset": per_ds,
-                "macro_bal_acc": macro_bal,
-            }
-
-    if best is None:
-        raise RuntimeError("No threshold met the requested constraints.")
+    holdout_metrics = None
+    holdout_cache = str(args.holdout_cache).strip()
+    if holdout_cache:
+        holdout_rows = json.loads(Path(holdout_cache).read_text())
+        X_holdout, y_holdout, ds_holdout = _extract_feature_rows(holdout_rows)
+        if len(X_holdout):
+            holdout_probs = model.predict_proba(X_holdout)[:, 1]
+            holdout_pred = (holdout_probs >= float(best["threshold"])).astype(int)
+            holdout_metrics = _metrics(y_holdout, holdout_pred)
+            holdout_metrics["per_dataset"] = _per_dataset_metrics(y_holdout, holdout_pred, ds_holdout)
 
     payload = {
         "model": model,
@@ -259,14 +227,21 @@ def main():
         "threshold": best["threshold"],
         "causal_breach_weights": {"av": causal_av_weight, "prob": causal_prob_weight},
         "validation": {
-            "n_train": int(len(X_train)),
-            "n_val": int(len(X_val)),
+            "source": f"{cache_path.stem}_{cv_folds}fold_cv",
+            "n_rows": int(len(X)),
             "macro_bal_acc": best["macro_bal_acc"],
             "overall": best["overall"],
             "per_dataset": best["per_dataset"],
         },
         "source_cache": str(cache_path.resolve()),
+        "selected_model_name": f"logreg_c{float(args.model_c):g}",
     }
+    if holdout_metrics is not None:
+        payload["holdout_test"] = {
+            k: v for k, v in holdout_metrics.items() if k != "per_dataset"
+        }
+        payload["holdout_test"]["per_dataset"] = holdout_metrics["per_dataset"]
+        payload["source_holdout_cache"] = str(Path(holdout_cache).resolve())
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(payload, out_path)
@@ -291,6 +266,13 @@ def main():
     print("Set env:")
     print(f"CFN_VIDEO_CALIBRATOR_PATH={out_path.resolve()}")
     print(f"CFN_CALIBRATOR_THRESH={best['threshold']:.4f}")
+    if holdout_metrics is not None:
+        print(
+            "Holdout:",
+            f"acc={holdout_metrics['acc']:.3f}",
+            f"bal_acc={holdout_metrics['bal_acc']:.3f}",
+            f"f1={holdout_metrics['f1']:.3f}",
+        )
 
 
 if __name__ == "__main__":
